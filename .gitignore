@@ -4,6 +4,12 @@ build/
 */build/
 !gradle/wrapper/gradle-wrapper.jar
 
+# Eclipse JDT.LS / jdtls-lsp compiled output
+bin/
+*/bin/
+.metadata/
+.recommenders/
+
 # IDE
 .idea/
 *.iml
