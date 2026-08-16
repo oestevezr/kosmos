@@ -38,7 +38,14 @@ caché. Se especifica así abajo para el inventario de bienes.
 
 ---
 
-## MVP 0.3 — Regional Economy
+## MVP 0.3 — Regional Economy — ✅ Completo
+
+Implementado tal como se decidió abajo: `GoodType` (8 bienes), `GoodsLedger`, `MarketSystem`,
+`RegionalGraph` (`sim.trade`), `BuildProductionBuildingCommand` (Farm/Lumber Camp/Mine/Quarry/
+Steel Mill/Trade Depot), persistencia en `economy.dat`. Cubierto por `MarketSystemTest`,
+`GoodsLedgerTest`, `RegionalGraphTest`, `BuildProductionBuildingCommandTest`,
+`GoodsLedgerRoundTripTest`. Las dos primeras preguntas abiertas (§ al final de este documento) se
+resolvieron: `TradeDepot` placeable desde el día 1, los 8 bienes completos desde el arranque.
 
 ### Qué pide el spec
 Recursos, producción, consumo, bienes, nodos económicos regionales, gateways de mercado externo,
@@ -189,20 +196,15 @@ sigue siendo válido para ciudades que nunca justifican uno).
 
 ---
 
-## Preguntas abiertas para decidir contigo antes de implementar 0.3
+## Preguntas resueltas (MVP 0.3)
 
-1. **`TradeDepot` como gateway temprano**: ¿de acuerdo con introducirlo en 0.3 como propongo, o
-   prefieres que 0.3 no tenga ningún gateway físico y el mercado externo sea puramente estadístico
-   (sin building) hasta que exista una carretera fronteriza/puerto/aeropuerto real?
-2. **Alcance de bienes en 0.3**: ¿los 8 bienes completos desde el principio, o empezar con un
-   subconjunto (p. ej. Food/Timber/Ore/Steel) y añadir el resto en 0.4 según haga falta para
-   flete?
+1. ~~`TradeDepot` como gateway temprano~~ — resuelto: placeable desde 0.3.
+2. ~~Alcance de bienes en 0.3~~ — resuelto: los 8 bienes completos desde el arranque.
+
+## Pregunta abierta para decidir antes de implementar MVP 0.5 (Port)
+
 3. **`PortRegistry` como registro secundario** vs. columnas opcionales en `BuildingRegistry`: la
    recomendación de este documento es un registro secundario indexado por `buildingId`, pero es
    una decisión de diseño con impacto en cómo se hace la persistencia — vale la pena confirmarla
-   antes de escribir `BuildingRegistryIO`-equivalente para puertos.
-
-Ninguna de estas bloquea el trabajo de exploración/diseño, pero sí conviene resolverlas antes de
-fijar el formato binario de `economy.dat` (spec §32: los formatos de guardado también se
-versionan explícitamente, así que ir y venir sobre el esquema después de implementarlo cuesta una
-migración, no una edición).
+   antes de escribir `BuildingRegistryIO`-equivalente para puertos. No bloquea nada de MVP 0.4
+   (Freight); solo hace falta resolverla cuando llegue el turno de Port.

@@ -27,9 +27,16 @@ el código fuente.
   electricidad/agua (grafo de alcanzabilidad), población/empleo agregados por edificio, impuestos.
   El cliente (`game-client`) todavía **no dibuja** zonas/carreteras/edificios — solo terreno.
 - **Pasada de validación/optimización post-Fase 2**: completa. Ver `docs/architecture.md` §10.
-- **MVP 0.3 (Regional Economy) en adelante**: solo planificado (`docs/roadmap.md`), sin código.
-  Hay 3 preguntas abiertas ahí que conviene resolver antes de implementar (alcance del
-  `TradeDepot`, cuántos bienes desde el arranque, `PortRegistry` vs columnas en `BuildingRegistry`).
+- **Fase 3 (MVP 0.3 — Regional Economy)**: completa. 8 bienes (`GoodType`), edificios de
+  producción gateados por los recursos naturales de Fase 1 (`BuildProductionBuildingCommand`:
+  Farm/Lumber Camp/Mine/Quarry/Steel Mill), `TradeDepot` como gateway de mercado externo desde
+  ya, `RegionalGraph` (adelantado desde MVP 0.4 a propósito, ver `docs/roadmap.md`), precio
+  derivado de inventario + costo de transporte, persistencia en `economy.dat`. El cliente
+  sigue sin dibujar nada de esto — todavía solo terreno.
+- **MVP 0.4 (Freight) en adelante**: solo planificado (`docs/roadmap.md`), sin código. Las
+  preguntas abiertas de `TradeDepot`/alcance de bienes que bloqueaban 0.3 ya se resolvieron;
+  la que queda pendiente es `PortRegistry` vs columnas en `BuildingRegistry`, relevante recién
+  en MVP 0.5 (Port).
 
 ## Estructura del proyecto
 
@@ -37,14 +44,17 @@ el código fuente.
 simulation-core/   Java puro. CERO dependencias de libGDX/LWJGL/Android — regla forzada por la
                     tarea Gradle `checkCoreIsolation` (falla el build si se viola).
   sim/world/        Chunks SoA, streaming (ChunkManager), terreno, generación procedural (gen/)
-  sim/commands/     Command bus, journal, comandos de terreno (terrain/) y de ciudad (city/)
-  sim/population/   BuildingRegistry (agregados por edificio), PopulationSystem
+  sim/commands/     Command bus, journal, comandos de terreno (terrain/), ciudad (city/) y
+                    economía (economy/)
+  sim/population/   BuildingRegistry (agregados por edificio, incluye campos de producción de
+                    Fase 3), PopulationSystem
   sim/transport/    RoadNetwork (acceso local por adyacencia — NO es el grafo regional)
   sim/utility/      UtilitySystem (flood-fill de electricidad/agua)
-  sim/economy/      GovernmentFinance, GovernmentFinanceSystem
+  sim/economy/      GovernmentFinance/System, GoodType, GoodsLedger, MarketSystem
+  sim/trade/        RegionalGraph (nodos/aristas — adelantado desde MVP 0.4, ver docs/roadmap.md)
   sim/persistence/  Formato binario propio (magic+versión+CRC32C+escritura atómica), nunca
                     ObjectOutputStream. Un archivo por tipo de estado (world.meta, chunks/*.delta,
-                    settlements.dat, ...)
+                    settlements.dat, economy.dat, ...)
   sim/util/         LongIntHashMap, Histogram — primitivas sin boxing para las rutas calientes
 
 game-client/        libGDX. render/ (IsoProjection, ChunkMesh, WorldRenderer), camera/, ui/,
