@@ -3,6 +3,7 @@ package com.kosmos.atlas.sim.commands;
 import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.economy.LoanRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
+import com.kosmos.atlas.sim.trade.PortRegistry;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
 import com.kosmos.atlas.sim.world.ChunkStore;
 
@@ -29,6 +30,7 @@ public final class SimulationContext {
     private final CityRegistry cities;
     private final RegionalGraph regionalGraph;
     private final LoanRegistry loans;
+    private final PortRegistry ports;
     private final int worldSizeTiles;
     private final long currentTick;
 
@@ -52,11 +54,18 @@ public final class SimulationContext {
 
     public SimulationContext(ChunkStore chunkStore, BuildingRegistry buildings, CityRegistry cities,
                               RegionalGraph regionalGraph, LoanRegistry loans, int worldSizeTiles, long currentTick) {
+        this(chunkStore, buildings, cities, regionalGraph, loans, null, worldSizeTiles, currentTick);
+    }
+
+    public SimulationContext(ChunkStore chunkStore, BuildingRegistry buildings, CityRegistry cities,
+                              RegionalGraph regionalGraph, LoanRegistry loans, PortRegistry ports,
+                              int worldSizeTiles, long currentTick) {
         this.chunkStore = chunkStore;
         this.buildings = buildings;
         this.cities = cities;
         this.regionalGraph = regionalGraph;
         this.loans = loans;
+        this.ports = ports;
         this.worldSizeTiles = worldSizeTiles;
         this.currentTick = currentTick;
     }
@@ -107,6 +116,17 @@ public final class SimulationContext {
             throw new IllegalStateException("This SimulationContext was not given a LoanRegistry");
         }
         return loans;
+    }
+
+    public PortRegistry ports() {
+        return ports;
+    }
+
+    public PortRegistry requirePorts() {
+        if (ports == null) {
+            throw new IllegalStateException("This SimulationContext was not given a PortRegistry");
+        }
+        return ports;
     }
 
     public int worldSizeTiles() {

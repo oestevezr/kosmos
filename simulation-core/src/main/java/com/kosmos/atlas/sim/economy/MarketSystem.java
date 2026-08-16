@@ -4,6 +4,7 @@ import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.trade.NodeType;
+import com.kosmos.atlas.sim.trade.PortRegistry;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
 import com.kosmos.atlas.sim.trade.ShipmentKind;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
@@ -44,6 +45,8 @@ public final class MarketSystem {
     /** Ticks between a shipment departing a depot and arriving (spec §14's departure_time/ETA). */
     private static final long SHIPMENT_TRAVEL_TICKS = 20;
     private static final int MAX_CONCURRENT_SHIPMENTS_PER_DEPOT = 3;
+    /** A Port's customs efficiency (0-100%) scales up to this fractional discount/premium on trades. */
+    private static final double PORT_CUSTOMS_MAX_BONUS = 0.10;
 
     // Household/business consumption rates (units per tick per resident/job) — spec §20 simplification.
     private static final double FOOD_PER_RESIDENT = 0.05;
@@ -53,17 +56,17 @@ public final class MarketSystem {
     private static final double CONSTRUCTION_MATERIALS_PER_INDUSTRIAL_JOB = 0.03;
 
     public void tick(BuildingRegistry buildings, CityRegistry cities, RegionalGraph graph,
-                      ShipmentRegistry shipments, long currentTick) {
-        cities.forEachActive(cityId -> tickOneCity(buildings, cities, cityId, graph, shipments, currentTick));
+                      ShipmentRegistry shipments, PortRegistry ports, long currentTick) {
+        cities.forEachActive(cityId -> tickOneCity(buildings, cities, cityId, graph, shipments, ports, currentTick));
     }
 
     private void tickOneCity(BuildingRegistry buildings, CityRegistry cities, int cityId,
-                              RegionalGraph graph, ShipmentRegistry shipments, long currentTick) {
+                              RegionalGraph graph, ShipmentRegistry shipments, PortRegistry ports, long currentTick) {
         GoodsLedger ledger = cities.ledger(cityId);
         ledger.beginTick();
         runProduction(buildings, cityId, ledger);
         runConsumption(buildings, cityId, ledger);
-        runTradeDepots(buildings, cityId, ledger, cities.finance(cityId), shipments, currentTick);
+        runGateways(buildings, cityId, ledger, cities.finance(cityId), shipments, ports, currentTick);
         updateTransportCosts(buildings, cityId, ledger, graph);
         ledger.repriceAll();
     }
@@ -117,50 +120,63 @@ public final class MarketSystem {
         }
     }
 
-    private void runTradeDepots(BuildingRegistry buildings, int cityId, GoodsLedger ledger, GovernmentFinance finance,
-                                 ShipmentRegistry shipments, long currentTick) {
+    /** Trade Depot and Port buildings both trade through this loop — a Port simply carries its own
+     *  per-tick capacity/concurrency cap/customs bonus via {@link PortRegistry} instead of the flat
+     *  Trade Depot constants (spec §17's higher-capacity coastal gateway). */
+    private void runGateways(BuildingRegistry buildings, int cityId, GoodsLedger ledger, GovernmentFinance finance,
+                              ShipmentRegistry shipments, PortRegistry ports, long currentTick) {
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
-            if (!buildings.isActive(id) || buildings.cityId(id) != cityId || buildings.type(id) != BuildingType.TRADE_DEPOT) {
+            if (!buildings.isActive(id) || buildings.cityId(id) != cityId) {
                 continue;
             }
-            if (shipments.countActiveForDepot(id) >= MAX_CONCURRENT_SHIPMENTS_PER_DEPOT) {
-                continue; // depot is at capacity this tick — every good it needs to trade waits
+            byte type = buildings.type(id);
+            if (type != BuildingType.TRADE_DEPOT && type != BuildingType.PORT) {
+                continue;
+            }
+            boolean isPort = type == BuildingType.PORT && ports != null && ports.hasPort(id);
+            int concurrentCap = isPort ? ports.berths(id) : MAX_CONCURRENT_SHIPMENTS_PER_DEPOT;
+            int capacityPerTick = isPort ? ports.cargoCapacityPerTick(id) : TRADE_DEPOT_CAPACITY_PER_TICK;
+            double customsBonus = isPort ? (ports.customsEfficiencyPercent(id) / 100.0) * PORT_CUSTOMS_MAX_BONUS : 0.0;
+
+            if (shipments.countActiveForDepot(id) >= concurrentCap) {
+                continue; // gateway is at capacity this tick — every good it needs to trade waits
             }
             for (byte good = 0; good < GoodType.COUNT; good++) {
-                if (shipments.countActiveForDepot(id) >= MAX_CONCURRENT_SHIPMENTS_PER_DEPOT) {
-                    break; // filled the depot's remaining slots partway through the good list
+                if (shipments.countActiveForDepot(id) >= concurrentCap) {
+                    break; // filled the gateway's remaining slots partway through the good list
                 }
-                tradeOneGood(ledger, finance, shipments, id, cityId, currentTick, good);
+                tradeOneGood(ledger, finance, shipments, id, cityId, currentTick, good, capacityPerTick, customsBonus);
             }
         }
     }
 
     /**
-     * Departs (but does not yet settle) a shipment for one good at one depot, spec §14/§15's
+     * Departs (but does not yet settle) a shipment for one good at one gateway, spec §14/§15's
      * origin/destination/commodity/quantity/departure_time/ETA. An import is paid for now but the
      * goods only land in inventory when {@code ShipmentSystem} completes it at its ETA; an export
      * leaves inventory now but the treasury is only paid on arrival — see {@code ShipmentSystem}'s
-     * javadoc for why the two sides of a trade are split that way.
+     * javadoc for why the two sides of a trade are split that way. {@code customsBonus} is a
+     * Port-only fractional discount on import cost / premium on export revenue (0 for Trade Depots).
      */
     private void tradeOneGood(GoodsLedger ledger, GovernmentFinance finance, ShipmentRegistry shipments,
-                               int depotId, int cityId, long currentTick, byte good) {
+                               int gatewayId, int cityId, long currentTick, byte good, int capacityPerTick, double customsBonus) {
         int inventory = ledger.inventory(good);
         int target = ledger.targetInventory(good);
         long eta = currentTick + SHIPMENT_TRAVEL_TICKS;
         if (inventory < target / 2) {
-            int imported = Math.min(target / 2 - inventory, TRADE_DEPOT_CAPACITY_PER_TICK);
+            int imported = Math.min(target / 2 - inventory, capacityPerTick);
             if (imported <= 0) {
                 return;
             }
-            finance.adjustTreasury(-imported * ledger.price(good));
-            shipments.create(ShipmentKind.IMPORT, good, imported, depotId, cityId, currentTick, eta);
+            finance.adjustTreasury(-imported * ledger.price(good) * (1.0 - customsBonus));
+            shipments.create(ShipmentKind.IMPORT, good, imported, gatewayId, cityId, currentTick, eta);
         } else if (inventory > target + target / 2) {
-            int exported = ledger.exportGood(good, Math.min(inventory - (target + target / 2), TRADE_DEPOT_CAPACITY_PER_TICK));
+            int exported = ledger.exportGood(good, Math.min(inventory - (target + target / 2), capacityPerTick));
             if (exported <= 0) {
                 return;
             }
-            shipments.create(ShipmentKind.EXPORT, good, exported, depotId, cityId, currentTick, eta);
+            shipments.create(ShipmentKind.EXPORT, good, exported, gatewayId, cityId, currentTick, eta);
         }
     }
 

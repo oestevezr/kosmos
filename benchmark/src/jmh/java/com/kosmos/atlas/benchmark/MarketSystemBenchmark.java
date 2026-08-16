@@ -59,6 +59,6 @@ public class MarketSystemBenchmark {
 
     @Benchmark
     public void tick() {
-        marketSystem.tick(city.buildings, city.cities, graph, shipments, tick++);
+        marketSystem.tick(city.buildings, city.cities, graph, shipments, null, tick++);
     }
 }

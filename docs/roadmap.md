@@ -233,31 +233,54 @@ de ejecutar con el toolchain correcto.)
 
 ---
 
-## MVP 0.5 — Port
+## MVP 0.5 — Port — ✅ Completo (alcance ajustado, ver abajo)
 
 ### Qué pide el spec
 Idoneidad de costa, construcción de puertos, comercio marítimo, barcos como entidades LOD,
 capacidad de importación/exportación (§17).
 
-### Ajuste
-Puerto = nuevo `BuildingType` + nodo especializado en `RegionalGraph` (ya existe desde 0.3) con
-`berths/cargo_capacity/passenger_capacity/storage/customs_efficiency` como campos adicionales —
-mismo patrón de extensión que ya usamos para `BuildingRegistry` (no hace falta un registro nuevo,
-solo más columnas SoA opcionales o un registro secundario `PortRegistry` indexado por
-`buildingId` si los campos no aplican a la mayoría de edificios — más limpio que engordar
-`BuildingRegistry` con columnas que el 99% de edificios no usa).
+### Decisión tomada sobre la pregunta abierta
+Se confirmó la recomendación de este documento: `PortRegistry` como registro secundario indexado
+por `buildingId` (no columnas nuevas en `BuildingRegistry`, no un id space propio con free-list —
+la fila de un puerto simplemente crece los arrays hasta cubrir su `buildingId`, sin tombstoning
+explícito, ya que ningún llamador lee `hasPort` sin haber comprobado antes que ese `buildingId`
+sigue activo y es de tipo `PORT`). `BuildingType.PORT` es el nuevo tipo de edificio;
+`RegionalGraph` gana su primer nodo `NodeType.PORT` real (ya declarado desde MVP 0.3 pero sin uso).
 
-Barcos como entidades LOD: reutilizan `ShipmentLODManager` de 0.4 (un barco es un shipment cuya
-ruta pasa por una arista de tipo "ruta marítima" en el grafo) — no un sistema aparte.
+### Ajuste de alcance real (desviación deliberada de lo planificado aquí)
+- **Berths/cargo_capacity/customs_efficiency**: implementados en `PortRegistry` con valores fijos
+  al construir (`BuildPortCommand.DEFAULT_*` — 6 amarres, 75 unidades/tick, 50% eficiencia
+  aduanera), no configurables por el jugador todavía; el spec no pide UI de configuración en 0.5.
+- **`passenger_capacity`/`storage`**: omitidos del `PortRegistry` de esta fase. `storage` ya está
+  cubierto por el `GoodsLedger` de la ciudad (spec §14's inventario no es por-edificio);
+  `passenger_capacity` no tiene consumidor hasta que exista demanda de pasajeros (MVP 0.6) —
+  añadirlo ahora sería una columna sin lector, la misma razón por la que `RegionalGraph.addEdge`
+  se declaró sin usarse en 0.3/0.4 hasta que hizo falta.
+- **Barcos como entidades LOD (`ShipmentLODManager`)**: descartado, igual que en 0.4 — `game-client`
+  sigue sin dibujar nada de la economía (solo terreno), así que no hay "barco" visual al que un
+  shipment pueda convertirse. `MarketSystem` trata un Puerto como un gateway de mayor capacidad
+  reutilizando el mismo bucle de `ShipmentRegistry`/`ShipmentSystem` que ya mueve el comercio del
+  `TradeDepot` — no hace falta un tipo de entidad nuevo para que el comercio marítimo funcione.
+- **Idoneidad de costa**: implementada exactamente como se planeó — adyacencia simple a 4 vecinos
+  ortogonales con `TERRAIN_SHALLOW_WATER`/`TERRAIN_DEEP_WATER` (`BuildPortCommand.isCoastal`), sin
+  generación adicional. Un chunk vecino no cargado se trata conservadoramente como "no agua" desde
+  ese lado — aproximación aceptable dado que el jugador normalmente construye cerca de su cámara,
+  donde los chunks vecinos ya están cargados.
 
-Idoneidad de costa: derivable de las capas de terreno ya existentes desde Fase 1
-(`TERRAIN_SHALLOW_WATER`/`TERRAIN_DEEP_WATER` adyacentes) sin generación adicional. El spec (§5.2)
-menciona "natural harbor suitability" como paso de generación separado — se puede diferir
-indefinidamente y aproximar con la regla de adyacencia simple hasta que el terreno cueste tenerlo.
+`MarketSystem.runGateways` (antes `runTradeDepots`) ahora itera tanto `TRADE_DEPOT` como `PORT`;
+un Puerto usa su propia capacidad/concurrencia de `PortRegistry` en vez de las constantes fijas del
+Trade Depot, y su eficiencia aduanera aplica un descuento en importación / prima en exportación
+(hasta 10% en el 100% de eficiencia) — ver `MarketSystem.PORT_CUSTOMS_MAX_BONUS`.
+
+### Persistencia
+`ports.dat` (spec §31) vía `PortRegistryIO`, mismo patrón magic+versión+CRC32C+escritura atómica.
+Solo se persisten los `buildingId` que tienen fila de puerto — un `boolean` por id, igual que
+`BuildingRegistryIO`/`ShipmentRegistryIO`.
 
 ### Qué medir
-Nada nuevo estructuralmente caro si el punto anterior (grafo regional con dirty-tracking) se hizo
-bien en 0.4 — puertos solo añaden nodos, no un algoritmo nuevo.
+Nada nuevo estructuralmente caro, confirmado — `runGateways` es el mismo bucle indexado de antes
+con una rama condicional adicional por edificio; ningún algoritmo nuevo, solo más tipos de edificio
+en un bucle ya medido (`MarketSystemBenchmark`).
 
 ---
 
@@ -284,15 +307,10 @@ sigue siendo válido para ciudades que nunca justifican uno).
 
 ---
 
-## Preguntas resueltas (MVP 0.3)
+## Preguntas resueltas
 
-1. ~~`TradeDepot` como gateway temprano~~ — resuelto: placeable desde 0.3.
-2. ~~Alcance de bienes en 0.3~~ — resuelto: los 8 bienes completos desde el arranque.
-
-## Pregunta abierta para decidir antes de implementar MVP 0.5 (Port)
-
-3. **`PortRegistry` como registro secundario** vs. columnas opcionales en `BuildingRegistry`: la
-   recomendación de este documento es un registro secundario indexado por `buildingId`, pero es
-   una decisión de diseño con impacto en cómo se hace la persistencia — vale la pena confirmarla
-   antes de escribir `BuildingRegistryIO`-equivalente para puertos. No bloquea nada de MVP 0.4
-   (Freight); solo hace falta resolverla cuando llegue el turno de Port.
+1. ~~`TradeDepot` como gateway temprano~~ — resuelto (MVP 0.3): placeable desde 0.3.
+2. ~~Alcance de bienes en 0.3~~ — resuelto (MVP 0.3): los 8 bienes completos desde el arranque.
+3. ~~`PortRegistry` como registro secundario vs. columnas opcionales en `BuildingRegistry`~~ —
+   resuelto (MVP 0.5): registro secundario indexado por `buildingId`, ver la sección de MVP 0.5
+   arriba para el detalle de implementación.

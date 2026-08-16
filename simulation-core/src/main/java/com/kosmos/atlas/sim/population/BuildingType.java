@@ -23,6 +23,10 @@ public final class BuildingType {
     /** The player-placed external-market gateway (spec §29) — imports/exports goods up to a capacity. */
     public static final byte TRADE_DEPOT = 10;
 
+    // --- MVP 0.5 (Port, spec §17) ---
+    /** Higher-capacity coastal trade gateway — see {@code com.kosmos.atlas.sim.trade.PortRegistry} for its extra fields. */
+    public static final byte PORT = 11;
+
     private BuildingType() {
     }
 }

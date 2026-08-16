@@ -50,8 +50,18 @@ el código fuente.
   (siempre disponible, interés fijo alto), `RequestCityLoanCommand` (gateado por prosperidad de la
   ciudad prestamista, tasa más baja cuanto más rica), `RepayLoanCommand`. Persistencia en
   `loans.dat`.
-- **MVP 0.5 (Port) en adelante**: solo planificado (`docs/roadmap.md`), sin código. Queda
-  pendiente la pregunta de `PortRegistry` vs columnas en `BuildingRegistry`.
+- **Fase 5 (MVP 0.5 — Port)**: completa, con alcance ajustado (ver `docs/roadmap.md`). Nuevo
+  `BuildingType.PORT`; `PortRegistry` como registro secundario indexado por `buildingId`
+  (berths/cargoCapacityPerTick/customsEfficiencyPercent — resuelto a favor de esto, no de columnas
+  en `BuildingRegistry`). `BuildPortCommand` exige idoneidad de costa aproximada por adyacencia
+  simple a 4 vecinos con agua (`TERRAIN_SHALLOW_WATER`/`TERRAIN_DEEP_WATER`), sin paso de
+  generación dedicado. Registra un nodo `NodeType.PORT` real en `RegionalGraph` (declarado desde
+  MVP 0.3, sin uso hasta ahora). `MarketSystem.runGateways` (antes `runTradeDepots`) ahora comercia
+  tanto `TRADE_DEPOT` como `PORT`, cada uno con su propia capacidad/concurrencia/eficiencia
+  aduanera. Barcos como entidades LOD descartados — mismo motivo que `ShipmentLODManager` en 0.4,
+  `game-client` sigue sin dibujar nada de la economía. Persistencia en `ports.dat`.
+- **MVP 0.6 (Regional Passenger Transport) en adelante**: solo planificado (`docs/roadmap.md`),
+  sin código.
 
 ## Estructura del proyecto
 
@@ -69,10 +79,11 @@ simulation-core/   Java puro. CERO dependencias de libGDX/LWJGL/Android — regl
   sim/economy/      GovernmentFinance/System, GoodType, GoodsLedger, MarketSystem,
                     LoanRegistry/LoanSystem/LoanLenderType (sistema de préstamos)
   sim/trade/        RegionalGraph (nodos/aristas — adelantado desde MVP 0.4, ver docs/roadmap.md),
-                    ShipmentRegistry/System (envíos del TradeDepot, sin streaming visual todavía)
+                    ShipmentRegistry/System (envíos del TradeDepot/Port, sin streaming visual
+                    todavía), PortRegistry (fila secundaria por buildingId de tipo PORT)
   sim/persistence/  Formato binario propio (magic+versión+CRC32C+escritura atómica), nunca
                     ObjectOutputStream. Un archivo por tipo de estado (world.meta, chunks/*.delta,
-                    settlements.dat, cities.dat, routes.dat, loans.dat, ...)
+                    settlements.dat, cities.dat, routes.dat, loans.dat, ports.dat, ...)
   sim/util/         LongIntHashMap, Histogram — primitivas sin boxing para las rutas calientes
 
 game-client/        libGDX. render/ (IsoProjection, ChunkMesh, WorldRenderer), camera/, ui/,
