@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.population;
 
+import com.kosmos.atlas.sim.Difficulty;
 import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.transport.RoadNetwork;
 import com.kosmos.atlas.sim.utility.UtilitySystem;
@@ -107,6 +108,37 @@ class PopulationSystemTest {
 
         assertTrue(system.totalResidentialPopulation(1) > 6, "population should grow past its seed value given jobs demand");
         assertTrue(system.totalCommercialJobs(1) > 6, "jobs should grow past seed value given workforce demand");
+    }
+
+    @Test
+    void difficultyScalesGrowthRate() {
+        long easyPopulation = populationAfterFiveTicks(Difficulty.EASY);
+        long hardPopulation = populationAfterFiveTicks(Difficulty.HARD);
+
+        assertTrue(easyPopulation > hardPopulation,
+            "Easy's faster growth multiplier should out-pace Hard's slower one given identical conditions");
+    }
+
+    private long populationAfterFiveTicks(Difficulty difficulty) {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+        chunk.zoneType[Chunk.tileIndex(9, 5)] = WorldConstants.ZONE_COMMERCIAL;
+
+        CityRegistry cities = new CityRegistry(difficulty);
+        cities.create("Testville", 10, 10, 0);
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+
+        PopulationSystem system = new PopulationSystem();
+        for (int i = 0; i < 5; i++) {
+            refreshServices(store, buildings);
+            system.tick(store, buildings, cities);
+        }
+        return system.totalResidentialPopulation(1);
     }
 
     @Test

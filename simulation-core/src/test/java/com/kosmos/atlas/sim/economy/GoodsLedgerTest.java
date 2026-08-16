@@ -8,6 +8,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GoodsLedgerTest {
 
     @Test
+    void defaultBasePricesDifferByProductionChainDepthNotFlatAcrossAllGoods() {
+        GoodsLedger ledger = new GoodsLedger();
+
+        assertTrue(ledger.basePrice(GoodType.STEEL) > ledger.basePrice(GoodType.ORE),
+            "refined Steel should cost more than the raw Ore it's made from");
+        assertTrue(ledger.basePrice(GoodType.CONSUMER_GOODS) > ledger.basePrice(GoodType.FOOD),
+            "a good with no domestic producer should be priced above a raw extracted staple");
+        assertTrue(ledger.basePrice(GoodType.MACHINERY) > ledger.basePrice(GoodType.CONSTRUCTION_MATERIALS),
+            "the most complex good should not be priced the same as quarried raw material");
+    }
+
+    @Test
     void produceAddsToInventoryAndTally() {
         GoodsLedger ledger = new GoodsLedger();
         ledger.beginTick();

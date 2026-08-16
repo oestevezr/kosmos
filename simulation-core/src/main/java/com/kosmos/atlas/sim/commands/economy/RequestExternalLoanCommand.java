@@ -17,10 +17,14 @@ import java.io.IOException;
  * city's prosperity, but at a fixed high interest rate (the user's requested loan design: "el
  * mercado externo simulado serían intereses altos"). No eligibility check beyond an active,
  * founded city and a sane amount — this is deliberately the lender of last resort.
+ *
+ * <p>{@link #INTEREST_RATE_PER_ACCRUAL} is the Medium-difficulty baseline; the effective rate is
+ * scaled by {@link com.kosmos.atlas.sim.Difficulty#loanInterestRateMultiplier} — a Hard world's
+ * credit costs more on top of already starting with a smaller treasury.
  */
 public final class RequestExternalLoanCommand extends Command {
 
-    /** High and fixed — the external market doesn't care about the borrower's prosperity. */
+    /** High and fixed at Medium difficulty — the external market doesn't care about the borrower's prosperity. */
     public static final double INTEREST_RATE_PER_ACCRUAL = 0.02;
     public static final double MAX_AMOUNT = 50_000.0;
 
@@ -48,8 +52,9 @@ public final class RequestExternalLoanCommand extends Command {
         }
 
         LoanRegistry loans = ctx.requireLoans();
+        double rate = INTEREST_RATE_PER_ACCRUAL * cities.difficulty().loanInterestRateMultiplier;
         cities.finance(borrowerCityId).adjustTreasury(amount);
-        loans.create(LoanLenderType.EXTERNAL_MARKET, borrowerCityId, 0, amount, INTEREST_RATE_PER_ACCRUAL, ctx.currentTick());
+        loans.create(LoanLenderType.EXTERNAL_MARKET, borrowerCityId, 0, amount, rate, ctx.currentTick());
         return CommandResult.ACCEPTED;
     }
 

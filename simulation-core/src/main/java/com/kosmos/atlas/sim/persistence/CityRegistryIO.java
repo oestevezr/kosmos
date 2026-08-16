@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.persistence;
 
+import com.kosmos.atlas.sim.Difficulty;
 import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.economy.GoodType;
 import com.kosmos.atlas.sim.economy.GovernmentFinance;
@@ -23,7 +24,8 @@ import java.nio.file.Path;
 public final class CityRegistryIO {
 
     private static final int MAGIC = 0x41544349; // "ATCI" (Atlas Cities)
-    private static final int FORMAT_VERSION = 1;
+    /** Bumped to 2 to persist the world's {@link Difficulty} (spec's difficulty system). */
+    private static final int FORMAT_VERSION = 2;
     private static final int MAX_CITIES = 1 << 16; // generous, still bounded
     private static final int MAX_NAME_LENGTH = 32;
     private static final int BYTES_PER_ACTIVE_CITY_UPPER_BOUND =
@@ -39,6 +41,7 @@ public final class CityRegistryIO {
             java.io.ByteArrayOutputStream buf =
                 new java.io.ByteArrayOutputStream(highWaterMark * BYTES_PER_ACTIVE_CITY_UPPER_BOUND + 8);
             DataOutputStream body = new DataOutputStream(buf);
+            body.writeByte(registry.difficulty().ordinal());
             body.writeInt(highWaterMark);
             for (int id = 1; id < highWaterMark; id++) {
                 body.writeBoolean(registry.isActive(id));
@@ -73,11 +76,17 @@ public final class CityRegistryIO {
             }
             byte[] body = BinaryBlockIO.readBlock(in, MAX_CITIES * BYTES_PER_ACTIVE_CITY_UPPER_BOUND + 8);
             DataInputStream bodyIn = new DataInputStream(new java.io.ByteArrayInputStream(body));
+            int difficultyOrdinal = bodyIn.readUnsignedByte();
+            Difficulty[] difficulties = Difficulty.values();
+            if (difficultyOrdinal < 0 || difficultyOrdinal >= difficulties.length) {
+                throw new SaveCorruptedException("cities.dat: unknown difficulty ordinal " + difficultyOrdinal);
+            }
+            Difficulty difficulty = difficulties[difficultyOrdinal];
             int highWaterMark = bodyIn.readInt();
             if (highWaterMark < 1 || highWaterMark > MAX_CITIES) {
                 throw new SaveCorruptedException("cities.dat: implausible highWaterMark " + highWaterMark);
             }
-            CityRegistry registry = CityRegistry.createForRestore(highWaterMark);
+            CityRegistry registry = CityRegistry.createForRestore(highWaterMark, difficulty);
             for (int id = 1; id < highWaterMark; id++) {
                 boolean isActive = bodyIn.readBoolean();
                 if (!isActive) {

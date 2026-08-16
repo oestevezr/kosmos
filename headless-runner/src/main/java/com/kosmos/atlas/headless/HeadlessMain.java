@@ -1,5 +1,6 @@
 package com.kosmos.atlas.headless;
 
+import com.kosmos.atlas.sim.Difficulty;
 import com.kosmos.atlas.sim.Metrics;
 import com.kosmos.atlas.sim.WorldManager;
 import com.kosmos.atlas.sim.commands.city.BuildPowerPlantCommand;
@@ -20,7 +21,7 @@ import com.kosmos.atlas.sim.world.gen.WorldGenSettings;
  *
  * <p>Usage:
  * <pre>
- * ./gradlew :headless-runner:run --args="--seed 819234 --size medium --bench chunkgen --chunks 2000"
+ * ./gradlew :headless-runner:run --args="--seed 819234 --size medium --difficulty hard --bench chunkgen --chunks 2000"
  * </pre>
  */
 public final class HeadlessMain {
@@ -29,10 +30,10 @@ public final class HeadlessMain {
         Args parsed = Args.parse(args);
         System.out.println("Atlas City headless runner");
         System.out.println("  seed=" + parsed.seed + " size=" + parsed.worldSizeTiles
-            + " profile=" + parsed.profile + " bench=" + parsed.bench);
+            + " profile=" + parsed.profile + " difficulty=" + parsed.difficulty + " bench=" + parsed.bench);
 
         WorldGenSettings genSettings = WorldGenSettings.balanced(parsed.seed, parsed.worldSizeTiles);
-        try (WorldManager world = new WorldManager(genSettings, parsed.profile)) {
+        try (WorldManager world = new WorldManager(genSettings, parsed.profile, parsed.difficulty)) {
             switch (parsed.bench) {
                 case "chunkgen" -> runChunkGenBenchmark(world, parsed.chunkCount);
                 case "city", "growth" -> runCityGrowthScenario(world, parsed.years);
@@ -197,6 +198,7 @@ public final class HeadlessMain {
         long seed = 819234L;
         int worldSizeTiles = 2048;
         HardwareProfile profile = HardwareProfile.MEDIUM;
+        Difficulty difficulty = Difficulty.MEDIUM;
         String bench = "smoke";
         int chunkCount = 500;
         int years = 50;
@@ -210,6 +212,7 @@ public final class HeadlessMain {
                     case "--seed" -> { a.seed = Long.parseLong(value); i++; }
                     case "--size" -> { a.worldSizeTiles = parseSize(value); i++; }
                     case "--profile" -> { a.profile = HardwareProfile.valueOf(value.toUpperCase()); i++; }
+                    case "--difficulty" -> { a.difficulty = Difficulty.valueOf(value.toUpperCase()); i++; }
                     case "--bench" -> { a.bench = value; i++; }
                     case "--chunks" -> { a.chunkCount = Integer.parseInt(value); i++; }
                     case "--years" -> { a.years = Integer.parseInt(value); i++; }

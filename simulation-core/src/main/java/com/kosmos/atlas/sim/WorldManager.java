@@ -62,7 +62,7 @@ public final class WorldManager implements AutoCloseable {
     private final Metrics metrics = new Metrics();
 
     private final BuildingRegistry buildings = new BuildingRegistry();
-    private final CityRegistry cities = new CityRegistry();
+    private final CityRegistry cities;
     private final RegionalGraph regionalGraph = new RegionalGraph();
     private final ShipmentRegistry shipments = new ShipmentRegistry();
     private final LoanRegistry loans = new LoanRegistry();
@@ -78,8 +78,13 @@ public final class WorldManager implements AutoCloseable {
     private CommandJournal journal; // optional — set via enableJournal()
 
     public WorldManager(WorldGenSettings genSettings, HardwareProfile profile) {
+        this(genSettings, profile, Difficulty.MEDIUM);
+    }
+
+    public WorldManager(WorldGenSettings genSettings, HardwareProfile profile, Difficulty difficulty) {
         this.genSettings = genSettings;
         this.profile = profile;
+        this.cities = new CityRegistry(difficulty);
         ProceduralGenerator generator = new ProceduralGenerator(genSettings);
         this.chunkManager = new ChunkManager(generator, profile, genSettings.worldSizeTiles, metrics);
 

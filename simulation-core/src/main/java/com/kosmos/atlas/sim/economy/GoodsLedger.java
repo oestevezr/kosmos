@@ -16,6 +16,27 @@ public final class GoodsLedger {
     private static final double MIN_PRICE_MULTIPLIER = 1.0;
     private static final double MAX_PRICE_MULTIPLIER = 2.0;
 
+    /**
+     * Starting {@link #basePrice} per good, indexed by {@link GoodType}'s byte constants — round
+     * numbers reflecting production-chain depth rather than a real commodity market (spec §20's
+     * "understandable rather than hyper-realistic"): extracted raw goods (Food/Timber/Ore/Fuel/
+     * ConstructionMaterials — {@code BuildProductionBuildingCommand}'s Farm/Lumber Camp/Mine/
+     * Quarry) sit low; Steel costs more because refining it from Ore is lossy (8 Ore in -> 6 Steel
+     * out, {@code MarketSystem}'s Steel Mill ratio); ConsumerGoods/Machinery have no domestic
+     * producer at all yet (only importable through a Trade Depot/Port), priced highest to reflect
+     * that scarcity until a later phase adds a factory building for them.
+     */
+    private static final double[] DEFAULT_BASE_PRICE_BY_GOOD = {
+        8.0,  // FOOD
+        9.0,  // TIMBER
+        14.0, // ORE
+        28.0, // STEEL
+        16.0, // FUEL
+        32.0, // CONSUMER_GOODS
+        45.0, // MACHINERY
+        12.0, // CONSTRUCTION_MATERIALS
+    };
+
     private final int[] inventory = new int[GoodType.COUNT];
     private final int[] producedLastTick = new int[GoodType.COUNT];
     private final int[] consumedLastTick = new int[GoodType.COUNT];
@@ -31,7 +52,7 @@ public final class GoodsLedger {
 
     public GoodsLedger() {
         for (int g = 0; g < GoodType.COUNT; g++) {
-            basePrice[g] = 10.0;
+            basePrice[g] = DEFAULT_BASE_PRICE_BY_GOOD[g];
             price[g] = basePrice[g];
             targetInventory[g] = 200;
         }

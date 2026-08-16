@@ -25,12 +25,13 @@ class GovernmentFinanceSystemTest {
         // A power plant must not be taxed as if it were a workplace.
         buildings.create(BuildingType.POWER_PLANT, 3, 0, cityId);
 
+        double before = cities.finance(cityId).treasuryBalance();
         new GovernmentFinanceSystem().tick(buildings, cities);
 
         double expected = 100 * 20.0 * GovernmentFinance.DEFAULT_TAX_RATE
             + 20 * 30.0 * GovernmentFinance.DEFAULT_TAX_RATE
             + 10 * 25.0 * GovernmentFinance.DEFAULT_TAX_RATE;
-        assertEquals(expected, cities.finance(cityId).treasuryBalance(), 1e-9);
+        assertEquals(expected, cities.finance(cityId).treasuryBalance() - before, 1e-9);
     }
 
     @Test
@@ -60,12 +61,14 @@ class GovernmentFinanceSystemTest {
         buildings.setPopulation(home, 50);
 
         GovernmentFinanceSystem system = new GovernmentFinanceSystem();
+        double beforeFirstTick = cities.finance(cityId).treasuryBalance();
         system.tick(buildings, cities);
-        double atDefaultRate = cities.finance(cityId).treasuryBalance();
+        double atDefaultRate = cities.finance(cityId).treasuryBalance() - beforeFirstTick;
 
+        double beforeSecondTick = cities.finance(cityId).treasuryBalance();
         cities.finance(cityId).setTaxRate(com.kosmos.atlas.sim.world.WorldConstants.ZONE_RESIDENTIAL, 0.5);
         system.tick(buildings, cities);
-        double atHigherRate = cities.finance(cityId).treasuryBalance() - atDefaultRate;
+        double atHigherRate = cities.finance(cityId).treasuryBalance() - beforeSecondTick;
 
         assertTrue(atHigherRate > atDefaultRate);
     }

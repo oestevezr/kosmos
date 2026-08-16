@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.city;
 
+import com.kosmos.atlas.sim.Difficulty;
 import com.kosmos.atlas.sim.economy.GoodsLedger;
 import com.kosmos.atlas.sim.economy.GovernmentFinance;
 
@@ -35,6 +36,7 @@ public final class CityRegistry {
     private boolean[] active;
     private GovernmentFinance[] finance;
     private GoodsLedger[] ledger;
+    private final Difficulty difficulty;
 
     private int highWaterMark = 1; // id 0 reserved as "no city"
     private int activeCount;
@@ -42,10 +44,19 @@ public final class CityRegistry {
     private int freeTop;
 
     public CityRegistry() {
-        this(8);
+        this(Difficulty.MEDIUM, 8);
+    }
+
+    public CityRegistry(Difficulty difficulty) {
+        this(difficulty, 8);
     }
 
     public CityRegistry(int initialCapacity) {
+        this(Difficulty.MEDIUM, initialCapacity);
+    }
+
+    public CityRegistry(Difficulty difficulty, int initialCapacity) {
+        this.difficulty = difficulty;
         int capacity = Math.max(2, initialCapacity) + 1;
         name = new String[capacity];
         tileX = new int[capacity];
@@ -71,11 +82,17 @@ public final class CityRegistry {
         tileX[id] = worldTileX;
         tileY[id] = worldTileY;
         foundedTick[id] = tick;
-        finance[id] = new GovernmentFinance();
+        GovernmentFinance newFinance = new GovernmentFinance();
+        newFinance.adjustTreasury(difficulty.startingTreasury);
+        finance[id] = newFinance;
         ledger[id] = new GoodsLedger();
         active[id] = true;
         activeCount++;
         return id;
+    }
+
+    public Difficulty difficulty() {
+        return difficulty;
     }
 
     public boolean isActive(int id) {
@@ -146,7 +163,11 @@ public final class CityRegistry {
     }
 
     public static CityRegistry createForRestore(int highWaterMarkValue) {
-        CityRegistry registry = new CityRegistry(Math.max(2, highWaterMarkValue));
+        return createForRestore(highWaterMarkValue, Difficulty.MEDIUM);
+    }
+
+    public static CityRegistry createForRestore(int highWaterMarkValue, Difficulty difficulty) {
+        CityRegistry registry = new CityRegistry(difficulty, Math.max(2, highWaterMarkValue));
         registry.highWaterMark = Math.max(1, highWaterMarkValue);
         return registry;
     }

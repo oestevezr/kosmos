@@ -60,6 +60,19 @@ el código fuente.
   tanto `TRADE_DEPOT` como `PORT`, cada uno con su propia capacidad/concurrencia/eficiencia
   aduanera. Barcos como entidades LOD descartados — mismo motivo que `ShipmentLODManager` en 0.4,
   `game-client` sigue sin dibujar nada de la economía. Persistencia en `ports.dat`.
+- **Sistema de dificultad**: completa (pedido explícito del usuario, fuera de la secuencia MVP
+  del spec, ver `docs/roadmap.md`). `Difficulty` (enum `EASY`/`MEDIUM`/`HARD`, junto a
+  `WorldManager` en `com.kosmos.atlas.sim`) — elegido a nivel de mundo, no por ciudad, opuesto a
+  `HardwareProfile` (ese nunca cambia reglas de simulación; `Difficulty` no cambia nada más).
+  Controla tesorería inicial (50K/25K/10K, inspirado en TheOtown), `growthRateMultiplier` de
+  `PopulationSystem`, y `loanInterestRateMultiplier` de ambos tipos de préstamo — los umbrales de
+  prosperidad de `RequestCityLoanCommand` NO se escalan (la tesorería inicial más baja ya hace el
+  trabajo). `CityRegistry` es el portador de la dificultad del mundo (`cities.difficulty()`).
+  `GoodsLedger.basePrice` ya no es parejo (`10.0` para los 8 bienes) — ahora difiere por
+  profundidad de cadena de producción. `WorldManager(genSettings, profile, difficulty)`;
+  `headless-runner` expone `--difficulty`. Persistencia: `cities.dat` gana la dificultad en su
+  cabecera (`CityRegistryIO.FORMAT_VERSION` 2). "Oportunidades" (eventos aleatorios) quedó
+  deliberadamente fuera de alcance — no existe ningún sistema de eventos en el proyecto.
 - **MVP 0.6 (Regional Passenger Transport) en adelante**: solo planificado (`docs/roadmap.md`),
   sin código.
 
@@ -68,6 +81,7 @@ el código fuente.
 ```
 simulation-core/   Java puro. CERO dependencias de libGDX/LWJGL/Android — regla forzada por la
                     tarea Gradle `checkCoreIsolation` (falla el build si se viola).
+  sim/              WorldManager (entry point), Difficulty (EASY/MEDIUM/HARD, a nivel de mundo)
   sim/world/        Chunks SoA, streaming (ChunkManager), terreno, generación procedural (gen/)
   sim/commands/     Command bus, journal, comandos de terreno (terrain/), ciudad (city/) y
                     economía (economy/)

@@ -113,11 +113,12 @@ class MarketSystemTest {
         ledger.setTargetInventory(GoodType.FUEL, 100);
         // Inventory starts at 0, well below target/2 -> depot should depart an import shipment.
 
+        double before = cities.finance(1).treasuryBalance();
         ShipmentRegistry shipments = new ShipmentRegistry();
         new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, 0);
 
         assertEquals(0, ledger.inventory(GoodType.FUEL), "goods aren't in inventory until the shipment arrives");
-        assertTrue(cities.finance(1).treasuryBalance() < 0, "importing is paid for at departure, not on arrival");
+        assertTrue(cities.finance(1).treasuryBalance() < before, "importing is paid for at departure, not on arrival");
         assertEquals(1, shipments.countActiveForDepot(depot));
     }
 
@@ -137,11 +138,12 @@ class MarketSystemTest {
         ledger.setTargetInventory(GoodType.TIMBER, 100);
         ledger.produce(GoodType.TIMBER, 500); // far above target + target/2 -> exportable surplus
 
+        double before = cities.finance(1).treasuryBalance();
         ShipmentRegistry shipments = new ShipmentRegistry();
         new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, 0);
 
         assertTrue(ledger.inventory(GoodType.TIMBER) < 500, "exported goods leave inventory immediately at departure");
-        assertEquals(0.0, cities.finance(1).treasuryBalance(), 1e-9, "export revenue isn't paid until the shipment arrives");
+        assertEquals(before, cities.finance(1).treasuryBalance(), 1e-9, "export revenue isn't paid until the shipment arrives");
         assertEquals(1, shipments.countActiveForDepot(depot));
     }
 
@@ -153,18 +155,19 @@ class MarketSystemTest {
         ledger.repriceAll();
         ShipmentRegistry shipments = new ShipmentRegistry();
 
+        double before = cities.finance(1).treasuryBalance();
         shipments.create(ShipmentKind.IMPORT, GoodType.ORE, 50, 1, 1, 0, 10);
         shipments.create(ShipmentKind.EXPORT, GoodType.STEEL, 30, 1, 1, 0, 10);
 
         ShipmentSystem system = new ShipmentSystem();
         system.tick(5, shipments, cities); // before ETA — nothing should settle yet
         assertEquals(0, ledger.inventory(GoodType.ORE));
-        assertEquals(0.0, cities.finance(1).treasuryBalance(), 1e-9);
+        assertEquals(before, cities.finance(1).treasuryBalance(), 1e-9);
         assertEquals(2, shipments.activeCount());
 
         system.tick(10, shipments, cities); // at ETA — both settle
         assertEquals(50, ledger.inventory(GoodType.ORE), "import lands in inventory on arrival");
-        assertTrue(cities.finance(1).treasuryBalance() > 0, "export revenue is paid on arrival");
+        assertTrue(cities.finance(1).treasuryBalance() > before, "export revenue is paid on arrival");
         assertEquals(0, shipments.activeCount());
     }
 

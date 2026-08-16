@@ -30,11 +30,20 @@ class LoanCommandsTest {
         buildings = new BuildingRegistry();
         cities = new CityRegistry();
         loans = new LoanRegistry();
+        // Cities start with Difficulty.MEDIUM's default treasury (25,000) — zeroed out here so
+        // each test controls exact balances instead of reasoning about the starting amount.
         borrower = cities.create("Borrowtown", 0, 0, 0);
+        zeroTreasury(borrower);
         prosperousLender = cities.create("Richfield", 100, 100, 0);
+        zeroTreasury(prosperousLender);
         cities.finance(prosperousLender).adjustTreasury(20_000.0);
         poorLender = cities.create("Poorville", 200, 200, 0);
+        zeroTreasury(poorLender);
         cities.finance(poorLender).adjustTreasury(1_000.0);
+    }
+
+    private void zeroTreasury(int cityId) {
+        cities.finance(cityId).adjustTreasury(-cities.finance(cityId).treasuryBalance());
     }
 
     private SimulationContext ctx() {

@@ -21,7 +21,10 @@ import java.io.IOException;
  * request is rejected outright — a struggling city can never be forced into lending. The interest
  * rate the borrower gets scales down as the lender's treasury grows past the prosperity floor
  * (richer lenders can afford to undercut the external market's fixed high rate), computed by
- * {@link #interestRateFor(double)}.
+ * {@link #interestRateFor(double)} — a Medium-difficulty baseline further scaled by
+ * {@link com.kosmos.atlas.sim.Difficulty#loanInterestRateMultiplier}, same as
+ * {@code RequestExternalLoanCommand}. The prosperity thresholds themselves are deliberately not
+ * difficulty-scaled — a Hard world's lower starting treasury already makes reaching them harder.
  */
 public final class RequestCityLoanCommand extends Command {
 
@@ -78,7 +81,7 @@ public final class RequestCityLoanCommand extends Command {
             return CommandResult.REJECTED_LENDER_NOT_PROSPEROUS;
         }
 
-        double rate = interestRateFor(lenderTreasury);
+        double rate = interestRateFor(lenderTreasury) * cities.difficulty().loanInterestRateMultiplier;
         lenderFinance.adjustTreasury(-amount);
         cities.finance(borrowerCityId).adjustTreasury(amount);
 

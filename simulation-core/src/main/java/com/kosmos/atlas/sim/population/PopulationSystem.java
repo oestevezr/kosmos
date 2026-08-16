@@ -66,7 +66,7 @@ public final class PopulationSystem {
     public void tick(ChunkStore store, BuildingRegistry buildings, CityRegistry cities) {
         ensureCapacity(cities.highWaterMark());
         recomputeCityTotals(buildings);
-        growExistingBuildings(store, buildings);
+        growExistingBuildings(store, buildings, cities.difficulty().growthRateMultiplier);
         settleEmptyZonedTiles(store, buildings, cities);
         recomputeCityTotals(buildings); // reflect any spawns from this same tick in the public totals
     }
@@ -105,7 +105,7 @@ public final class PopulationSystem {
         }
     }
 
-    private void growExistingBuildings(ChunkStore store, BuildingRegistry buildings) {
+    private void growExistingBuildings(ChunkStore store, BuildingRegistry buildings, double growthRateMultiplier) {
         buildings.forEachActive(id -> {
             byte type = buildings.type(id);
             if (type != BuildingType.RESIDENTIAL && type != BuildingType.COMMERCIAL && type != BuildingType.INDUSTRIAL) {
@@ -120,35 +120,35 @@ public final class PopulationSystem {
 
             int cityId = buildings.cityId(id);
             if (type == BuildingType.RESIDENTIAL) {
-                growResidential(buildings, id, cityId);
+                growResidential(buildings, id, cityId, growthRateMultiplier);
             } else {
-                growWorkplace(buildings, id, cityId);
+                growWorkplace(buildings, id, cityId, growthRateMultiplier);
             }
         });
     }
 
-    private void growResidential(BuildingRegistry buildings, int id, int cityId) {
+    private void growResidential(BuildingRegistry buildings, int id, int cityId, double growthRateMultiplier) {
         int current = buildings.population(id);
         if (current >= RESIDENTIAL_CAPACITY) {
             return;
         }
         long totalJobs = totalCommercialJobs(cityId) + totalIndustrialJobs(cityId);
         double demandFactor = clamp01((double) totalJobs / Math.max(1, totalResidentialPopulation(cityId) + 1));
-        int growth = (int) Math.round(GROWTH_STEP * demandFactor);
+        int growth = (int) Math.round(GROWTH_STEP * demandFactor * growthRateMultiplier);
         if (growth <= 0) {
             return;
         }
         buildings.setPopulation(id, Math.min(RESIDENTIAL_CAPACITY, current + growth));
     }
 
-    private void growWorkplace(BuildingRegistry buildings, int id, int cityId) {
+    private void growWorkplace(BuildingRegistry buildings, int id, int cityId, double growthRateMultiplier) {
         int current = buildings.jobs(id);
         if (current >= JOB_CAPACITY) {
             return;
         }
         long totalJobs = totalCommercialJobs(cityId) + totalIndustrialJobs(cityId);
         double workforceFactor = clamp01((double) totalResidentialPopulation(cityId) / Math.max(1, totalJobs + 1));
-        int growth = (int) Math.round(GROWTH_STEP * workforceFactor);
+        int growth = (int) Math.round(GROWTH_STEP * workforceFactor * growthRateMultiplier);
         if (growth <= 0) {
             return;
         }

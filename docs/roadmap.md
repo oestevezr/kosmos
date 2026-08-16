@@ -284,6 +284,62 @@ en un bucle ya medido (`MarketSystemBenchmark`).
 
 ---
 
+## Sistema de dificultad — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+Pregunta del usuario: al iniciar un mundo, ¿con cuánto dinero arranca una ciudad? No existía
+ningún concepto de dificultad — `GovernmentFinance.treasuryBalance` arrancaba en `0.0` sin más.
+El usuario propuso montos inspirados en TheOtown (Fácil 50K / Medio 25K / Difícil 10K) y preguntó
+si la dificultad también debería afectar créditos, oportunidades y crecimiento.
+
+### Alcance acordado con el usuario
+Antes de implementar se acotó el alcance con dos rondas de preguntas:
+- **Dónde se elige**: a nivel de mundo (como `HardwareProfile`), no por ciudad — todas las
+  ciudades fundadas en un mundo comparten la misma dificultad.
+- **Qué escala**: tesorería inicial, términos de préstamo (interés) y tasa de crecimiento de
+  población/empleo. **"Oportunidades" (eventos aleatorios) queda deliberadamente fuera** — no
+  existe ningún sistema de eventos en el proyecto; introducirlo sería una fase aparte, no un
+  efecto secundario de este cambio.
+- **Moneda y precios**: el usuario señaló, con razón, que la economía nunca definió una moneda ni
+  precios diferenciados por tipo de bien (`GoodsLedger.basePrice` era `10.0` parejo para los 8
+  bienes). Se decidió mantener una sola divisa por mundo sin nombre propio (sigue siendo un
+  `double` mostrado con "$" genérico — el multi-divisa por país es una expansión grande sin ningún
+  consumidor todavía, contraria a spec §20's "económica entendible") pero sí rebalancear
+  `basePrice` por profundidad de cadena de producción antes de fijar montos de dificultad sobre
+  una base pareja artificialmente.
+
+### Implementación
+`Difficulty` (enum en `com.kosmos.atlas.sim`, junto a `WorldManager`) — el eje opuesto a
+`HardwareProfile`: donde `HardwareProfile` explícitamente nunca cambia reglas de simulación,
+`Difficulty` no cambia nada más. Tres niveles (`EASY`/`MEDIUM`/`HARD`) con `startingTreasury`
+(50K/25K/10K), `growthRateMultiplier` (1.25/1.0/0.75) y `loanInterestRateMultiplier`
+(0.75/1.0/1.5, aplicado tanto al mercado externo como a préstamos entre ciudades).
+
+`CityRegistry` es el portador natural de este ajuste mundial — ya posee un `GovernmentFinance`
+por ciudad, así que `CityRegistry.create()` aplica `difficulty.startingTreasury` a cada ciudad
+recién fundada; `RequestExternalLoanCommand`/`RequestCityLoanCommand` leen
+`cities.difficulty().loanInterestRateMultiplier` vía `ctx.requireCities()`; `PopulationSystem.tick`
+ya recibía `cities`, así que lee `cities.difficulty().growthRateMultiplier` sin parámetros nuevos.
+Deliberadamente **no** se escalan los umbrales de prosperidad de `RequestCityLoanCommand` — la
+tesorería inicial más baja en Difícil ya hace más difícil alcanzarlos, un segundo multiplicador
+sería redundante.
+
+`WorldManager` gana un constructor de 3 argumentos (`WorldGenSettings, HardwareProfile,
+Difficulty`); el de 2 argumentos existente sigue funcionando, con `Difficulty.MEDIUM` por defecto.
+`headless-runner` expone `--difficulty easy|medium|hard`.
+
+`GoodsLedger.DEFAULT_BASE_PRICE_BY_GOOD` reemplaza el `10.0` parejo: extraídos (Food/Timber/Ore/
+Fuel/ConstructionMaterials) quedan baratos, Steel más caro que Ore (refinar pierde material, 8 Ore
+→ 6 Steel), y ConsumerGoods/Machinery — que **ningún edificio produce todavía**, solo son
+importables — quedan como los más caros hasta que una fase futura les dé un productor doméstico.
+
+### Persistencia
+`cities.dat` gana la dificultad del mundo en su cabecera (`CityRegistryIO.FORMAT_VERSION` 1→2) —
+así una ciudad fundada después de cargar una partida sigue recibiendo la tesorería inicial
+correcta, y los comandos de préstamo siguen leyendo el multiplicador de interés correcto.
+
+---
+
 ## MVP 0.6 — Regional Passenger Transport
 
 ### Qué pide el spec
