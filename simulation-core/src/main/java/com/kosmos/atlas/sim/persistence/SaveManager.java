@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.persistence;
 
+import com.kosmos.atlas.sim.economy.GoodsLedger;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
@@ -46,6 +47,11 @@ public final class SaveManager {
      * a save with buildings on the map must always include it.
      */
     public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings) throws IOException {
+        save(worldName, meta, chunkStore, buildings, null);
+    }
+
+    /** As {@link #save(String, WorldMeta, ChunkStore, BuildingRegistry)}, also writing {@code economy.dat} if {@code goodsLedger} is non-null. */
+    public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings, GoodsLedger goodsLedger) throws IOException {
         Path worldDir = resolveWorldDir(worldName);
         meta.writeTo(worldDir.resolve("world.meta"));
 
@@ -71,6 +77,9 @@ public final class SaveManager {
         if (buildings != null) {
             BuildingRegistryIO.write(worldDir.resolve("settlements.dat"), buildings);
         }
+        if (goodsLedger != null) {
+            GoodsLedgerIO.write(worldDir.resolve("economy.dat"), goodsLedger);
+        }
     }
 
     public WorldMeta loadMeta(String worldName) throws IOException {
@@ -84,6 +93,14 @@ public final class SaveManager {
 
     public BuildingRegistry loadBuildingRegistry(String worldName) throws IOException {
         return BuildingRegistryIO.read(resolveWorldDir(worldName).resolve("settlements.dat"));
+    }
+
+    public boolean hasGoodsLedger(String worldName) throws IOException {
+        return Files.isRegularFile(resolveWorldDir(worldName).resolve("economy.dat"));
+    }
+
+    public GoodsLedger loadGoodsLedger(String worldName) throws IOException {
+        return GoodsLedgerIO.read(resolveWorldDir(worldName).resolve("economy.dat"));
     }
 
     /** Lists every persisted chunk-delta coordinate for a world, without loading their content yet. */

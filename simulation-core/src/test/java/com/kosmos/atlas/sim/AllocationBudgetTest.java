@@ -4,7 +4,6 @@ import com.kosmos.atlas.sim.util.Histogram;
 import org.junit.jupiter.api.Test;
 
 import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadMXBean;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

@@ -13,10 +13,12 @@ import com.kosmos.atlas.sim.trade.RegionalGraph;
  *
  * <p>One tick, in order:
  * <ol>
- *   <li>production buildings turn input goods (if any) into output goods, drawing on last tick's
- *       inventory — a deliberate one-tick lag rather than trying to guarantee same-tick delivery
- *       order between e.g. a mine and the steel mill it feeds (spec §20's "understandable rather
- *       than hyper-realistic");</li>
+ *   <li>production buildings turn input goods (if any) into output goods, in {@code BuildingRegistry}
+ *       id order — a building fed by another one created earlier (a lower id) sees that tick's
+ *       fresh output; one created later sees only what was already in inventory before this tick.
+ *       This is a deliberate simplification rather than trying to model true same-tick delivery
+ *       ordering independent of creation order (spec §20's "understandable rather than
+ *       hyper-realistic") — see {@code MarketSystemTest} for the exact id-order semantics;</li>
  *   <li>residential/commercial/industrial buildings consume goods proportional to
  *       population/jobs;</li>
  *   <li>every active {@code TradeDepot} imports goods running short and exports goods in surplus,

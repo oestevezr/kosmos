@@ -40,6 +40,15 @@ public final class SimulationScheduler {
         return tickIndex;
     }
 
+    /** Names of every registered system, in registration order — for debug/diagnostic display only. */
+    public List<String> registeredSystemNames() {
+        List<String> names = new ArrayList<>(registrations.size());
+        for (Registration reg : registrations) {
+            names.add(reg.name);
+        }
+        return names;
+    }
+
     /** Advances the simulation by {@code ticks} whole ticks, running each system on its due ticks. */
     public void advance(int ticks) {
         for (int i = 0; i < ticks; i++) {

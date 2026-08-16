@@ -57,8 +57,22 @@ public final class GoodsLedger {
         return shortageLastTick[good];
     }
 
+    public double basePrice(byte good) {
+        return basePrice[good];
+    }
+
     public void setBasePrice(byte good, double value) {
         basePrice[good] = value;
+    }
+
+    /**
+     * Directly sets inventory during a save load — {@code GoodsLedgerIO} restores the
+     * authoritative stock level this way, then calls {@link #repriceAll()} once to derive prices
+     * rather than persisting {@link #price(byte)} itself (it's fully recomputable, same reasoning
+     * as {@code Chunk.serviceFlags} not needing to be authoritative state).
+     */
+    public void setInventory(byte good, int value) {
+        inventory[good] = Math.max(0, value);
     }
 
     public int targetInventory(byte good) {
