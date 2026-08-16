@@ -33,10 +33,15 @@ el código fuente.
   ya, `RegionalGraph` (adelantado desde MVP 0.4 a propósito, ver `docs/roadmap.md`), precio
   derivado de inventario + costo de transporte, persistencia en `economy.dat`. El cliente
   sigue sin dibujar nada de esto — todavía solo terreno.
-- **MVP 0.4 (Freight) en adelante**: solo planificado (`docs/roadmap.md`), sin código. Las
-  preguntas abiertas de `TradeDepot`/alcance de bienes que bloqueaban 0.3 ya se resolvieron;
-  la que queda pendiente es `PortRegistry` vs columnas en `BuildingRegistry`, relevante recién
-  en MVP 0.5 (Port).
+- **Fase 4 (MVP 0.4 — Freight)**: completa, con alcance ajustado respecto al plan original (ver
+  `docs/roadmap.md`). `ShipmentRegistry`/`ShipmentSystem` (SoA simple, sin hilos — se descartó el
+  `ShipmentLODManager` estilo `ChunkManager` porque `game-client` no dibuja nada que un envío
+  pueda "convertirse en" todavía). El comercio del `TradeDepot` ahora tiene demora real
+  (ETA, pago en salida/entrega en llegada) y un tope de 3 envíos concurrentes por depósito
+  (cuello de botella real, spec §17). `RegionalGraph.addEdge` ganó un campo `EdgeType`. Medido:
+  `ShipmentSystem.tick` ~0.2–0.9 µs/op con 500 envíos activos. Persistencia en `routes.dat`.
+- **MVP 0.5 (Port) en adelante**: solo planificado (`docs/roadmap.md`), sin código. Queda
+  pendiente la pregunta de `PortRegistry` vs columnas en `BuildingRegistry`.
 
 ## Estructura del proyecto
 
@@ -51,10 +56,11 @@ simulation-core/   Java puro. CERO dependencias de libGDX/LWJGL/Android — regl
   sim/transport/    RoadNetwork (acceso local por adyacencia — NO es el grafo regional)
   sim/utility/      UtilitySystem (flood-fill de electricidad/agua)
   sim/economy/      GovernmentFinance/System, GoodType, GoodsLedger, MarketSystem
-  sim/trade/        RegionalGraph (nodos/aristas — adelantado desde MVP 0.4, ver docs/roadmap.md)
+  sim/trade/        RegionalGraph (nodos/aristas — adelantado desde MVP 0.4, ver docs/roadmap.md),
+                    ShipmentRegistry/System (envíos del TradeDepot, sin streaming visual todavía)
   sim/persistence/  Formato binario propio (magic+versión+CRC32C+escritura atómica), nunca
                     ObjectOutputStream. Un archivo por tipo de estado (world.meta, chunks/*.delta,
-                    settlements.dat, economy.dat, ...)
+                    settlements.dat, economy.dat, routes.dat, ...)
   sim/util/         LongIntHashMap, Histogram — primitivas sin boxing para las rutas calientes
 
 game-client/        libGDX. render/ (IsoProjection, ChunkMesh, WorldRenderer), camera/, ui/,

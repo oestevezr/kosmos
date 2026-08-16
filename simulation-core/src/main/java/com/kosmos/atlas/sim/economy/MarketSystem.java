@@ -4,6 +4,8 @@ import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.trade.NodeType;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
+import com.kosmos.atlas.sim.trade.ShipmentKind;
+import com.kosmos.atlas.sim.trade.ShipmentRegistry;
 
 /**
  * Drives the {@code Production -> Logistics -> Consumption} loop spec §20 asks for, at
@@ -21,9 +23,12 @@ import com.kosmos.atlas.sim.trade.RegionalGraph;
  *       hyper-realistic") — see {@code MarketSystemTest} for the exact id-order semantics;</li>
  *   <li>residential/commercial/industrial buildings consume goods proportional to
  *       population/jobs;</li>
- *   <li>every active {@code TradeDepot} imports goods running short and exports goods in surplus,
- *       up to its own capacity, moving currency through {@link GovernmentFinance#adjustTreasury}
- *       (spec §29: the external market has its own commodity prices);</li>
+ *   <li>every active {@code TradeDepot} that's running short on a good or sitting on a surplus
+ *       creates a {@code Shipment} (spec §14) rather than trading instantly — see
+ *       {@code ShipmentSystem} for when the goods/money actually move — up to
+ *       {@link #MAX_CONCURRENT_SHIPMENTS_PER_DEPOT} shipments in flight per depot at once
+ *       (spec §17's bottleneck example: demand beyond capacity delays cargo rather than being
+ *       silently unlimited);</li>
  *   <li>transport cost per good is re-derived from the average distance of that good's producers
  *       to the nearest external-market node (spec §20: "transport cost contributes to final
  *       price"), and prices are recomputed from the resulting inventory levels.</li>
@@ -33,6 +38,9 @@ public final class MarketSystem {
 
     private static final int TRADE_DEPOT_CAPACITY_PER_TICK = 25;
     private static final double TRANSPORT_COST_PER_TILE = 0.01;
+    /** Ticks between a shipment departing a depot and arriving (spec §14's departure_time/ETA). */
+    private static final long SHIPMENT_TRAVEL_TICKS = 20;
+    private static final int MAX_CONCURRENT_SHIPMENTS_PER_DEPOT = 3;
 
     // Household/business consumption rates (units per tick per resident/job) — spec §20 simplification.
     private static final double FOOD_PER_RESIDENT = 0.05;
@@ -41,11 +49,12 @@ public final class MarketSystem {
     private static final double STEEL_PER_INDUSTRIAL_JOB = 0.03;
     private static final double CONSTRUCTION_MATERIALS_PER_INDUSTRIAL_JOB = 0.03;
 
-    public void tick(BuildingRegistry buildings, GoodsLedger ledger, GovernmentFinance finance, RegionalGraph graph) {
+    public void tick(BuildingRegistry buildings, GoodsLedger ledger, GovernmentFinance finance,
+                      RegionalGraph graph, ShipmentRegistry shipments, long currentTick) {
         ledger.beginTick();
         runProduction(buildings, ledger);
         runConsumption(buildings, ledger);
-        runTradeDepots(buildings, ledger, finance);
+        runTradeDepots(buildings, ledger, finance, shipments, currentTick);
         updateTransportCosts(buildings, ledger, graph);
         ledger.repriceAll();
     }
@@ -99,29 +108,50 @@ public final class MarketSystem {
         }
     }
 
-    private void runTradeDepots(BuildingRegistry buildings, GoodsLedger ledger, GovernmentFinance finance) {
+    private void runTradeDepots(BuildingRegistry buildings, GoodsLedger ledger, GovernmentFinance finance,
+                                 ShipmentRegistry shipments, long currentTick) {
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
             if (!buildings.isActive(id) || buildings.type(id) != BuildingType.TRADE_DEPOT) {
                 continue;
             }
+            if (shipments.countActiveForDepot(id) >= MAX_CONCURRENT_SHIPMENTS_PER_DEPOT) {
+                continue; // depot is at capacity this tick — every good it needs to trade waits
+            }
             for (byte good = 0; good < GoodType.COUNT; good++) {
-                tradeOneGood(ledger, finance, good);
+                if (shipments.countActiveForDepot(id) >= MAX_CONCURRENT_SHIPMENTS_PER_DEPOT) {
+                    break; // filled the depot's remaining slots partway through the good list
+                }
+                tradeOneGood(ledger, finance, shipments, id, currentTick, good);
             }
         }
     }
 
-    private void tradeOneGood(GoodsLedger ledger, GovernmentFinance finance, byte good) {
+    /**
+     * Departs (but does not yet settle) a shipment for one good at one depot, spec §14/§15's
+     * origin/destination/commodity/quantity/departure_time/ETA. An import is paid for now but the
+     * goods only land in inventory when {@code ShipmentSystem} completes it at its ETA; an export
+     * leaves inventory now but the treasury is only paid on arrival — see {@code ShipmentSystem}'s
+     * javadoc for why the two sides of a trade are split that way.
+     */
+    private void tradeOneGood(GoodsLedger ledger, GovernmentFinance finance, ShipmentRegistry shipments,
+                               int depotId, long currentTick, byte good) {
         int inventory = ledger.inventory(good);
         int target = ledger.targetInventory(good);
+        long eta = currentTick + SHIPMENT_TRAVEL_TICKS;
         if (inventory < target / 2) {
-            int need = target / 2 - inventory;
-            int imported = ledger.importGood(good, Math.min(need, TRADE_DEPOT_CAPACITY_PER_TICK));
+            int imported = Math.min(target / 2 - inventory, TRADE_DEPOT_CAPACITY_PER_TICK);
+            if (imported <= 0) {
+                return;
+            }
             finance.adjustTreasury(-imported * ledger.price(good));
+            shipments.create(ShipmentKind.IMPORT, good, imported, depotId, currentTick, eta);
         } else if (inventory > target + target / 2) {
-            int surplus = inventory - (target + target / 2);
-            int exported = ledger.exportGood(good, Math.min(surplus, TRADE_DEPOT_CAPACITY_PER_TICK));
-            finance.adjustTreasury(exported * ledger.price(good) * 0.9); // sell at a small discount to base price
+            int exported = ledger.exportGood(good, Math.min(inventory - (target + target / 2), TRADE_DEPOT_CAPACITY_PER_TICK));
+            if (exported <= 0) {
+                return;
+            }
+            shipments.create(ShipmentKind.EXPORT, good, exported, depotId, currentTick, eta);
         }
     }
 

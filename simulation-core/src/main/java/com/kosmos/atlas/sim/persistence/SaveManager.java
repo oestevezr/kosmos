@@ -2,6 +2,7 @@ package com.kosmos.atlas.sim.persistence;
 
 import com.kosmos.atlas.sim.economy.GoodsLedger;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
+import com.kosmos.atlas.sim.trade.ShipmentRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
 
@@ -52,6 +53,12 @@ public final class SaveManager {
 
     /** As {@link #save(String, WorldMeta, ChunkStore, BuildingRegistry)}, also writing {@code economy.dat} if {@code goodsLedger} is non-null. */
     public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings, GoodsLedger goodsLedger) throws IOException {
+        save(worldName, meta, chunkStore, buildings, goodsLedger, null);
+    }
+
+    /** As above, also writing {@code routes.dat} (in-flight shipments, spec §31) if {@code shipments} is non-null. */
+    public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings,
+                      GoodsLedger goodsLedger, ShipmentRegistry shipments) throws IOException {
         Path worldDir = resolveWorldDir(worldName);
         meta.writeTo(worldDir.resolve("world.meta"));
 
@@ -80,6 +87,9 @@ public final class SaveManager {
         if (goodsLedger != null) {
             GoodsLedgerIO.write(worldDir.resolve("economy.dat"), goodsLedger);
         }
+        if (shipments != null) {
+            ShipmentRegistryIO.write(worldDir.resolve("routes.dat"), shipments);
+        }
     }
 
     public WorldMeta loadMeta(String worldName) throws IOException {
@@ -101,6 +111,14 @@ public final class SaveManager {
 
     public GoodsLedger loadGoodsLedger(String worldName) throws IOException {
         return GoodsLedgerIO.read(resolveWorldDir(worldName).resolve("economy.dat"));
+    }
+
+    public boolean hasShipments(String worldName) throws IOException {
+        return Files.isRegularFile(resolveWorldDir(worldName).resolve("routes.dat"));
+    }
+
+    public ShipmentRegistry loadShipments(String worldName) throws IOException {
+        return ShipmentRegistryIO.read(resolveWorldDir(worldName).resolve("routes.dat"));
     }
 
     /** Lists every persisted chunk-delta coordinate for a world, without loading their content yet. */

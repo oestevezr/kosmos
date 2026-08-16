@@ -103,45 +103,61 @@ mismo patrón magic+versión+CRC32C que `BuildingRegistryIO`.
 
 ---
 
-## MVP 0.4 — Freight
+## MVP 0.4 — Freight — ✅ Completo (alcance ajustado, ver abajo)
 
 ### Qué pide el spec
 Grafo de flete, camiones, flete ferroviario, terminales de carga, envíos (shipments), cuellos de
 botella (§14, §15).
 
-### Ajuste: reutilizar el patrón de streaming de `ChunkManager` para los shipments
-El spec §15 describe el LOD de flete como: shipment abstracto lejos → se convierte en entidad
-visual de tren/camión cerca del área activa → vuelve a ser shipment abstracto al alejarse. Esto es
-**estructuralmente el mismo problema** que `ChunkManager` ya resuelve para chunks (generar/cargar
-cerca del foco, expulsar lejos, sin mantener todo el mundo activo). Ajuste concreto: nombrar el
-componente `ShipmentLODManager` y calcarle el modelo de `ChunkManager` — cola de prioridad por
-distancia al área activa, integración acotada por tick (`integrateReadyChunks` → equivalente para
-shipments), en vez de diseñarlo desde cero como un sistema nuevo.
+### Ajuste de alcance real (desviación deliberada de lo planificado aquí)
+Lo planificado originalmente en esta sección proponía un `ShipmentLODManager` calcado de
+`ChunkManager` (cola de prioridad, hilos worker, streaming de entidades visuales tren/camión cerca
+de la cámara). Al llegar a implementarlo, `game-client` seguía sin dibujar nada más que terreno
+— ni carreteras, ni edificios, mucho menos flete — así que construir la mitad "streaming a
+representación visual" del patrón habría sido abstracción prematura sobre una necesidad que no
+existe todavía (spec §55: "¿esto crea trabajo/complejidad que el jugador no puede ver
+significativamente?"). Ajuste real:
 
-### Ajuste de rendimiento (aplicando la lección transversal)
-`RegionalGraph` con flujo real (congestión, capacidad, cuellos de botella) es el candidato más
-serio a repetir el patrón `UtilitySystem`: es un grafo que puede necesitar recomputar
-alcanzabilidad/congestión con cada envío. Ajuste: diseñarlo desde el principio con la misma
-distinción que ya aplicamos en Fase 2 —
-- estado **autoritativo** (aristas, capacidad declarada, shipments activos) → cambia por comando,
-  marca dirty;
-- estado **derivado** (congestión actual, costo efectivo de una arista) → recalculado, nunca marca
-  dirty él mismo (la misma trampa que documentamos en `RoadNetwork`/`UtilitySystem`: si el
-  recomputo derivado dispara su propia invalidación, se auto-perpetúa).
+- `ShipmentRegistry` (SoA, mismo patrón id-estable-con-lista-libre que `BuildingRegistry`) en vez
+  de un manager con hilos — los envíos no necesitan generación asíncrona como los chunks, son
+  creados instantáneamente por `MarketSystem` y liquidados por `ShipmentSystem.tick`.
+- `ShipmentSystem` es una única pasada lineal sobre los envíos activos — sin cola de prioridad,
+  sin worker threads. Medido: 0.18–0.89 µs/op con 500 envíos activos (`ShipmentSystemBenchmark`),
+  órdenes de magnitud por debajo de cualquier presupuesto de frame — el diseño simple era
+  correcto para esta escala, no hacía falta la maquinaria de `ChunkManager`.
+- El comercio del `TradeDepot` (antes instantáneo en 0.3) ahora pasa por un envío real con
+  ETA: una importación se paga en la salida pero los bienes llegan al inventario en el arribo; una
+  exportación sale del inventario en la salida pero el ingreso se cobra en el arribo — la
+  asimetría de spec §14/§15 (origin/destination/commodity/quantity/departure_time/ETA) aplicada
+  al único punto donde ya teníamos tráfico real (importación/exportación), sin inventar
+  camiones/trenes domésticos que no tienen ningún productor→consumidor distinto que conectar
+  todavía (la economía sigue siendo un único `GoodsLedger` de ciudad, no por edificio).
+- Cuello de botella real: cada `TradeDepot` limita a 3 envíos concurrentes
+  (`MAX_CONCURRENT_SHIPMENTS_PER_DEPOT`) — si necesita comerciar más de 3 bienes a la vez, los
+  que no caben esperan al siguiente tick, tal cual spec §17's "Demand: 18,000 t/day, Port
+  capacity: 12,000 t/day → delayed cargo".
+- `RegionalGraph.addEdge` ganó un campo `EdgeType` (ROAD/RAILWAY/SEA_ROUTE/AIR_ROUTE) para no
+  tener que romper el formato otra vez cuando MVP 0.5/0.6 empiecen a crear aristas reales entre
+  destinos distintos — sigue sin usarse por ningún sistema todavía, igual que en 0.3.
 
-Y con seguimiento de "sucio" por arista (similar al `LongIntHashMap` de versión-por-chunk de
-`RoadNetwork`) para no recalcular congestión de aristas por las que no pasó ningún envío nuevo
-desde el último tick.
+El streaming visual completo (`ShipmentLODManager` al estilo `ChunkManager`) queda pendiente para
+cuando `game-client` efectivamente dibuje algo que un tren/camión pueda recorrer — construirlo
+antes sería puro andamiaje sin usuario.
+
+### Rendimiento — medido, no solo planificado
+`ShipmentSystem.tick` (`ShipmentSystemBenchmark`, 500 envíos activos): 0.18 µs/op sin arribos,
+0.89 µs/op liquidando todos a la vez. `MarketSystem.tick` con cadena de producción completa
+(`MarketSystemBenchmark`): 23.5 µs/op. Ninguno de los dos necesitó la distinción
+autoritativo/derivado con seguimiento de "sucio" que se planeaba aquí — no hay recomputo de
+congestión en este alcance porque no hay flujo real sobre `RegionalGraph` todavía (ver el ajuste
+de alcance arriba). Esa distinción sigue siendo la correcta el día que aristas reales con
+congestión lleguen (0.5+), pero no había nada que optimizar prematuramente ahora.
 
 ### Persistencia
-`routes.dat` (ya nombrado en spec §31): shipments activos + estado de aristas. Los shipments en
-tránsito son estado con el que hay que tener cuidado especial al cargar una partida — un shipment
-cuya ruta ya no existe (arista demolida mientras el juego estaba cerrado) necesita una regla de
-recuperación explícita (recalcular ruta o cancelarlo), no un crash al cargar.
-
-### Qué medir antes de cerrar la fase
-- Benchmark JMH de `ShipmentLODManager` y de recomputo de congestión, **incluido en el mismo PR**
-  que los introduce — este es el punto donde de verdad importa no repetir el error de Fase 2.
+`routes.dat` (spec §31): envíos activos, vía `ShipmentRegistryIO` (mismo patrón magic+CRC32C+
+escritura atómica). No hay aristas persistidas todavía (`RegionalGraph.addEdge` sigue sin
+llamadas reales) así que no aplica el caso "arista demolida invalida un shipment en tránsito" que
+se anticipaba aquí — se recupera cuando ese escenario exista de verdad.
 
 ---
 

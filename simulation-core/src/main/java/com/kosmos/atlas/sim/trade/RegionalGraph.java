@@ -31,6 +31,7 @@ public final class RegionalGraph {
     private int freeNodeTop;
 
     // --- Edges (unused by MVP 0.3 gameplay; structure only — see class javadoc) ---
+    private byte[] edgeType;
     private int[] edgeFrom;
     private int[] edgeTo;
     private float[] edgeDistanceTiles;
@@ -51,6 +52,7 @@ public final class RegionalGraph {
         freeNodeIds = new int[nc];
 
         int ec = Math.max(1, edgeCapacity);
+        edgeType = new byte[ec];
         edgeFrom = new int[ec];
         edgeTo = new int[ec];
         edgeDistanceTiles = new float[ec];
@@ -122,18 +124,25 @@ public final class RegionalGraph {
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    /** Declared for MVP 0.4 — see class javadoc. Not called by any MVP 0.3 system yet. */
-    public int addEdge(int fromNodeId, int toNodeId, float distanceTiles, int capacityPerTick, float costPerTile) {
+    /** Declared for MVP 0.5+ — real routable edges between distinct destination types (Port,
+     *  Airport) aren't buildable yet in MVP 0.4, which only models the off-map trade connection
+     *  at each gateway node directly (see {@code ShipmentSystem}). Not called by any system yet. */
+    public int addEdge(byte type, int fromNodeId, int toNodeId, float distanceTiles, int capacityPerTick, float costPerTile) {
         if (edgeCount == edgeFrom.length) {
             growEdges();
         }
         int id = edgeCount++;
+        edgeType[id] = type;
         edgeFrom[id] = fromNodeId;
         edgeTo[id] = toNodeId;
         edgeDistanceTiles[id] = distanceTiles;
         edgeCapacityPerTick[id] = capacityPerTick;
         edgeCostPerTile[id] = costPerTile;
         return id;
+    }
+
+    public byte edgeType(int id) {
+        return edgeType[id];
     }
 
     public int edgeCount() {
@@ -158,6 +167,7 @@ public final class RegionalGraph {
 
     private void growEdges() {
         int newCapacity = edgeFrom.length * 2;
+        edgeType = Arrays.copyOf(edgeType, newCapacity);
         edgeFrom = Arrays.copyOf(edgeFrom, newCapacity);
         edgeTo = Arrays.copyOf(edgeTo, newCapacity);
         edgeDistanceTiles = Arrays.copyOf(edgeDistanceTiles, newCapacity);

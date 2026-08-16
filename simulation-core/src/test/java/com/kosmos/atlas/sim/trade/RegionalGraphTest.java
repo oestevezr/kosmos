@@ -60,9 +60,11 @@ class RegionalGraphTest {
         RegionalGraph graph = new RegionalGraph(4, 1);
         int a = graph.addNode(NodeType.EXTERNAL_MARKET, 0, 0);
         int b = graph.addNode(NodeType.PORT, 10, 0);
+        int lastId = -1;
         for (int i = 0; i < 10; i++) {
-            graph.addEdge(a, b, 10f, 100, 0.5f);
+            lastId = graph.addEdge(EdgeType.RAILWAY, a, b, 10f, 100, 0.5f);
         }
         assertEquals(10, graph.edgeCount());
+        assertEquals(EdgeType.RAILWAY, graph.edgeType(lastId));
     }
 }

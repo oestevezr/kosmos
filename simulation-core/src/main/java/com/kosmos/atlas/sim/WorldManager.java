@@ -12,6 +12,8 @@ import com.kosmos.atlas.sim.economy.MarketSystem;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.PopulationSystem;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
+import com.kosmos.atlas.sim.trade.ShipmentRegistry;
+import com.kosmos.atlas.sim.trade.ShipmentSystem;
 import com.kosmos.atlas.sim.transport.RoadNetwork;
 import com.kosmos.atlas.sim.utility.UtilitySystem;
 import com.kosmos.atlas.sim.world.ChunkManager;
@@ -45,6 +47,7 @@ public final class WorldManager implements AutoCloseable {
     private static final int POPULATION_CADENCE_TICKS = 10;
     private static final int FINANCE_CADENCE_TICKS = 50;
     private static final int MARKET_CADENCE_TICKS = 50;
+    private static final int SHIPMENT_CADENCE_TICKS = 5;
 
     private final WorldGenSettings genSettings;
     private final HardwareProfile profile;
@@ -58,11 +61,13 @@ public final class WorldManager implements AutoCloseable {
     private final GovernmentFinance finance = new GovernmentFinance();
     private final GoodsLedger goodsLedger = new GoodsLedger();
     private final RegionalGraph regionalGraph = new RegionalGraph();
+    private final ShipmentRegistry shipments = new ShipmentRegistry();
     private final RoadNetwork roadNetwork = new RoadNetwork();
     private final UtilitySystem utilitySystem = new UtilitySystem();
     private final PopulationSystem populationSystem = new PopulationSystem();
     private final GovernmentFinanceSystem financeSystem = new GovernmentFinanceSystem();
     private final MarketSystem marketSystem = new MarketSystem();
+    private final ShipmentSystem shipmentSystem = new ShipmentSystem();
 
     private CommandJournal journal; // optional — set via enableJournal()
 
@@ -83,7 +88,9 @@ public final class WorldManager implements AutoCloseable {
         scheduler.register("government-finance", FINANCE_CADENCE_TICKS, tick ->
             financeSystem.tick(buildings, finance));
         scheduler.register("market", MARKET_CADENCE_TICKS, tick ->
-            marketSystem.tick(buildings, goodsLedger, finance, regionalGraph));
+            marketSystem.tick(buildings, goodsLedger, finance, regionalGraph, shipments, tick));
+        scheduler.register("shipments", SHIPMENT_CADENCE_TICKS, tick ->
+            shipmentSystem.tick(tick, shipments, goodsLedger, finance));
     }
 
     public WorldGenSettings genSettings() {
@@ -128,6 +135,10 @@ public final class WorldManager implements AutoCloseable {
 
     public RegionalGraph regionalGraph() {
         return regionalGraph;
+    }
+
+    public ShipmentRegistry shipments() {
+        return shipments;
     }
 
     public void enableJournal(CommandJournal journal) {
