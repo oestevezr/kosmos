@@ -1,6 +1,7 @@
 package com.kosmos.atlas.sim.commands;
 
 import com.kosmos.atlas.sim.city.CityRegistry;
+import com.kosmos.atlas.sim.economy.LoanRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
 import com.kosmos.atlas.sim.world.ChunkStore;
@@ -27,6 +28,7 @@ public final class SimulationContext {
     private final BuildingRegistry buildings;
     private final CityRegistry cities;
     private final RegionalGraph regionalGraph;
+    private final LoanRegistry loans;
     private final int worldSizeTiles;
     private final long currentTick;
 
@@ -45,10 +47,16 @@ public final class SimulationContext {
 
     public SimulationContext(ChunkStore chunkStore, BuildingRegistry buildings, CityRegistry cities,
                               RegionalGraph regionalGraph, int worldSizeTiles, long currentTick) {
+        this(chunkStore, buildings, cities, regionalGraph, null, worldSizeTiles, currentTick);
+    }
+
+    public SimulationContext(ChunkStore chunkStore, BuildingRegistry buildings, CityRegistry cities,
+                              RegionalGraph regionalGraph, LoanRegistry loans, int worldSizeTiles, long currentTick) {
         this.chunkStore = chunkStore;
         this.buildings = buildings;
         this.cities = cities;
         this.regionalGraph = regionalGraph;
+        this.loans = loans;
         this.worldSizeTiles = worldSizeTiles;
         this.currentTick = currentTick;
     }
@@ -88,6 +96,17 @@ public final class SimulationContext {
             throw new IllegalStateException("This SimulationContext was not given a RegionalGraph");
         }
         return regionalGraph;
+    }
+
+    public LoanRegistry loans() {
+        return loans;
+    }
+
+    public LoanRegistry requireLoans() {
+        if (loans == null) {
+            throw new IllegalStateException("This SimulationContext was not given a LoanRegistry");
+        }
+        return loans;
     }
 
     public int worldSizeTiles() {

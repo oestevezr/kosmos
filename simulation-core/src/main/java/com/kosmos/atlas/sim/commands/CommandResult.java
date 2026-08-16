@@ -17,5 +17,13 @@ public enum CommandResult {
     /** No city has been founded close enough (or at all) to attribute this building/policy to (spec §9). */
     REJECTED_NO_CITY_FOUNDED,
     /** A new city can't be founded this close to an existing one — territory attribution would be meaningless. */
-    REJECTED_TOO_CLOSE_TO_ANOTHER_CITY
+    REJECTED_TOO_CLOSE_TO_ANOTHER_CITY,
+    /** A requested/repaid loan amount was zero, negative, or above the type's cap. */
+    REJECTED_INVALID_LOAN_AMOUNT,
+    /** The lending city isn't prosperous enough to extend credit right now (spec's loan system). */
+    REJECTED_LENDER_NOT_PROSPEROUS,
+    /** A city cannot lend to itself. */
+    REJECTED_SAME_CITY_LOAN,
+    /** The referenced loan id doesn't exist or has already been repaid in full. */
+    REJECTED_LOAN_NOT_FOUND
 }

@@ -1,6 +1,7 @@
 package com.kosmos.atlas.sim.persistence;
 
 import com.kosmos.atlas.sim.city.CityRegistry;
+import com.kosmos.atlas.sim.economy.LoanRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
@@ -59,6 +60,12 @@ public final class SaveManager {
     /** As above, also writing {@code routes.dat} (in-flight shipments, spec §31) if {@code shipments} is non-null. */
     public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings,
                       CityRegistry cities, ShipmentRegistry shipments) throws IOException {
+        save(worldName, meta, chunkStore, buildings, cities, shipments, null);
+    }
+
+    /** As above, also writing {@code loans.dat} (outstanding loans) if {@code loans} is non-null. */
+    public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings,
+                      CityRegistry cities, ShipmentRegistry shipments, LoanRegistry loans) throws IOException {
         Path worldDir = resolveWorldDir(worldName);
         meta.writeTo(worldDir.resolve("world.meta"));
 
@@ -90,6 +97,9 @@ public final class SaveManager {
         if (shipments != null) {
             ShipmentRegistryIO.write(worldDir.resolve("routes.dat"), shipments);
         }
+        if (loans != null) {
+            LoanRegistryIO.write(worldDir.resolve("loans.dat"), loans);
+        }
     }
 
     public WorldMeta loadMeta(String worldName) throws IOException {
@@ -119,6 +129,14 @@ public final class SaveManager {
 
     public ShipmentRegistry loadShipments(String worldName) throws IOException {
         return ShipmentRegistryIO.read(resolveWorldDir(worldName).resolve("routes.dat"));
+    }
+
+    public boolean hasLoans(String worldName) throws IOException {
+        return Files.isRegularFile(resolveWorldDir(worldName).resolve("loans.dat"));
+    }
+
+    public LoanRegistry loadLoans(String worldName) throws IOException {
+        return LoanRegistryIO.read(resolveWorldDir(worldName).resolve("loans.dat"));
     }
 
     /** Lists every persisted chunk-delta coordinate for a world, without loading their content yet. */

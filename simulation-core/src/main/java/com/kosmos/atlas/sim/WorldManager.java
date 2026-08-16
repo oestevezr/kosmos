@@ -7,6 +7,8 @@ import com.kosmos.atlas.sim.commands.CommandJournal;
 import com.kosmos.atlas.sim.commands.CommandResult;
 import com.kosmos.atlas.sim.commands.SimulationContext;
 import com.kosmos.atlas.sim.economy.GovernmentFinanceSystem;
+import com.kosmos.atlas.sim.economy.LoanRegistry;
+import com.kosmos.atlas.sim.economy.LoanSystem;
 import com.kosmos.atlas.sim.economy.MarketSystem;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.PopulationSystem;
@@ -48,6 +50,7 @@ public final class WorldManager implements AutoCloseable {
     private static final int FINANCE_CADENCE_TICKS = 50;
     private static final int MARKET_CADENCE_TICKS = 50;
     private static final int SHIPMENT_CADENCE_TICKS = 5;
+    private static final int LOAN_CADENCE_TICKS = 50;
 
     private final WorldGenSettings genSettings;
     private final HardwareProfile profile;
@@ -61,12 +64,14 @@ public final class WorldManager implements AutoCloseable {
     private final CityRegistry cities = new CityRegistry();
     private final RegionalGraph regionalGraph = new RegionalGraph();
     private final ShipmentRegistry shipments = new ShipmentRegistry();
+    private final LoanRegistry loans = new LoanRegistry();
     private final RoadNetwork roadNetwork = new RoadNetwork();
     private final UtilitySystem utilitySystem = new UtilitySystem();
     private final PopulationSystem populationSystem = new PopulationSystem();
     private final GovernmentFinanceSystem financeSystem = new GovernmentFinanceSystem();
     private final MarketSystem marketSystem = new MarketSystem();
     private final ShipmentSystem shipmentSystem = new ShipmentSystem();
+    private final LoanSystem loanSystem = new LoanSystem();
 
     private CommandJournal journal; // optional — set via enableJournal()
 
@@ -90,6 +95,8 @@ public final class WorldManager implements AutoCloseable {
             marketSystem.tick(buildings, cities, regionalGraph, shipments, tick));
         scheduler.register("shipments", SHIPMENT_CADENCE_TICKS, tick ->
             shipmentSystem.tick(tick, shipments, cities));
+        scheduler.register("loans", LOAN_CADENCE_TICKS, tick ->
+            loanSystem.tick(loans));
     }
 
     public WorldGenSettings genSettings() {
@@ -136,6 +143,10 @@ public final class WorldManager implements AutoCloseable {
         return shipments;
     }
 
+    public LoanRegistry loans() {
+        return loans;
+    }
+
     public void enableJournal(CommandJournal journal) {
         this.journal = journal;
     }
@@ -173,7 +184,7 @@ public final class WorldManager implements AutoCloseable {
         Command command;
         while ((command = commandBus.poll()) != null) {
             SimulationContext ctx = new SimulationContext(
-                chunkManager.store(), buildings, cities, regionalGraph, genSettings.worldSizeTiles, scheduler.currentTick());
+                chunkManager.store(), buildings, cities, regionalGraph, loans, genSettings.worldSizeTiles, scheduler.currentTick());
             CommandResult result = command.apply(ctx);
             if (result == CommandResult.ACCEPTED) {
                 metrics.onCommandAccepted();

@@ -161,6 +161,78 @@ se anticipaba aquí — se recupera cuando ese escenario exista de verdad.
 
 ---
 
+## Multi-ciudad + Sistema de préstamos — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+Pregunta del usuario: una vez que existen varias ciudades fundadas por el jugador (spec §9), ¿cómo
+se distingue qué dinero pertenece a cuál ciudad? Y sobre eso: un sistema de préstamos con dos tipos
+de prestamista — el mercado externo simulado (siempre disponible, interés alto) y otras ciudades
+fundadas (interés que depende de la simulación; ciudades prósperas pueden ofrecer crédito).
+
+### Secuenciación decidida
+El usuario eligió explícitamente "multi-ciudad primero, luego ambos préstamos" en vez de construir
+préstamos sobre la ciudad única existente y migrar después — evita reescribir el sistema de
+préstamos dos veces.
+
+### Fundación multi-ciudad
+`CityRegistry` (spec §9, §42.3): cada ciudad fundada por el jugador es una entidad de primera clase
+— SoA growable con tombstone free-list (mismo patrón que `BuildingRegistry`/`ShipmentRegistry`),
+pero cada slot posee una instancia real de `GovernmentFinance` (tesorería, tasas de impuesto) y
+`GoodsLedger` (inventario/producción/precio) en vez de aplanar sus campos en más columnas — spec
+§42.3 permite explícitamente un objeto por unidad en el nivel CITY de la jerarquía de agregación
+porque el número de ciudades es pequeño y acotado, a diferencia de edificios o tiles.
+
+Atribución de territorio: implícita, "ciudad fundada más cercana" (`CityRegistry.nearestCity`),
+el mismo patrón Voronoi-like que `RegionalGraph.nearestNodeOfType` ya usa para comercio — no existe
+ni se planea una herramienta de dibujar fronteras. Cada edificio, envío y política fiscal queda
+atribuido a la ciudad más cercana a su tile en el momento de creación (`BuildingRegistry.cityId`,
+`ShipmentRegistry.cityId`, `SetTaxPolicyCommand(cityId, ...)`).
+
+`FoundCityCommand` es ahora el primer comando obligatorio de cualquier partida — todo comando que
+crea edificios (`AbstractPlaceUtilityBuildingCommand`, `BuildProductionBuildingCommand`) o
+recauda impuestos rechaza con `REJECTED_NO_CITY_FOUNDED` si no hay ninguna ciudad fundada cerca.
+
+Persistencia: `cities.dat` vía `CityRegistryIO` reemplaza al antiguo `economy.dat` de tesorería
+única — identidad de cada ciudad + tesorería + tasas de impuesto + inventario del `GoodsLedger`,
+reutilizando `GoodsLedgerIO.writeInto/readInto` (extraídos del antiguo formato de archivo único
+para poder embeberse por ciudad sin duplicar la lógica de codificación).
+
+### Sistema de préstamos
+`LoanRegistry` (SoA, mismo patrón de tombstone free-list): cada préstamo activo registra tipo de
+prestamista (`LoanLenderType.EXTERNAL_MARKET` o `CITY`), ciudad deudora, ciudad prestamista (0 si es
+el mercado externo), principal, saldo pendiente, tasa de interés por acumulación, y tick de origen.
+
+Deliberadamente simple, seleccionado como el patrón MVP ya establecido en `GovernmentFinance`
+("balance is allowed to go negative — spec's MVP economy has no bankruptcy rule yet"): `LoanSystem`
+solo acumula interés sobre el saldo cada tick (`balance += balance * rate`); nunca debita
+automáticamente la tesorería del deudor. El jugador debe pagar activamente vía `RepayLoanCommand`.
+
+- `RequestExternalLoanCommand`: siempre disponible para cualquier ciudad fundada, tasa fija alta
+  (2% por acumulación), tope de monto (`MAX_AMOUNT` = 50 000).
+- `RequestCityLoanCommand`: exige que la ciudad prestamista tenga tesorería ≥
+  `PROSPERITY_MIN_TREASURY` (5 000) y que, tras el préstamo, le queden ≥ `MIN_RESERVE_AFTER_LENDING`
+  (2 000) — una ciudad nunca puede ser forzada a prestar hasta quedar en problemas. La tasa de
+  interés baja linealmente con la prosperidad del prestamista, desde `BASE_INTEREST_RATE_PER_ACCRUAL`
+  (0.8%) hasta `MIN_INTEREST_RATE_PER_ACCRUAL` (0.2%) al llegar a `PROSPERITY_RATE_FLOOR_TREASURY`
+  (50 000) — ciudades más ricas pueden permitirse ofrecer mejores tasas que el mercado externo.
+- `RepayLoanCommand`: el pago se limita al saldo pendiente (no se puede sobrepagar); el dinero sale
+  siempre de la tesorería del deudor y solo llega a una tesorería prestamista si el prestamista es
+  otra ciudad — un pago a un préstamo externo simplemente sale de la economía simulada, igual que
+  las importaciones de `MarketSystem`.
+
+Persistencia: `loans.dat` vía `LoanRegistryIO`, mismo patrón magic+versión+CRC32C+escritura atómica.
+
+### Rendimiento — medido, no solo planificado
+`LoanSystem.tick` es un bucle indexado plano sobre `highWaterMark`, sin boxing ni asignación por
+tick (spec §42.4) — mismo patrón ya validado en `GovernmentFinanceSystem`/`MarketSystem`.
+`LoanSystemBenchmark` (500 préstamos activos) está escrito en este mismo cambio, siguiendo la
+lección explícita de Fase 2 (`UtilitySystem`): medir un sistema nuevo cuando se introduce, no
+después. (Ejecutarlo requiere el toolchain JDK 17 del proyecto — el runner JMH del entorno de
+desarrollo usado aquí tenía JDK 11 en el `PATH`, incompatible con las clases compiladas; pendiente
+de ejecutar con el toolchain correcto.)
+
+---
+
 ## MVP 0.5 — Port
 
 ### Qué pide el spec

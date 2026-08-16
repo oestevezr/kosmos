@@ -40,6 +40,16 @@ el código fuente.
   (ETA, pago en salida/entrega en llegada) y un tope de 3 envíos concurrentes por depósito
   (cuello de botella real, spec §17). `RegionalGraph.addEdge` ganó un campo `EdgeType`. Medido:
   `ShipmentSystem.tick` ~0.2–0.9 µs/op con 500 envíos activos. Persistencia en `routes.dat`.
+- **Multi-ciudad + Sistema de préstamos**: completa (pedido explícito del usuario, fuera de la
+  secuencia MVP del spec, ver `docs/roadmap.md`). `CityRegistry` — cada ciudad fundada
+  (`FoundCityCommand`) posee su propia `GovernmentFinance`/`GoodsLedger`; territorio implícito por
+  "ciudad más cercana" (`CityRegistry.nearestCity`), sin herramienta de fronteras. Todo comando que
+  crea edificios ahora exige una ciudad fundada cerca (`REJECTED_NO_CITY_FOUNDED`). Persistencia en
+  `cities.dat` (reemplaza el antiguo `economy.dat` de tesorería única). Préstamos: `LoanRegistry`/
+  `LoanSystem` (solo acumula interés, sin auto-débito — MVP simple), `RequestExternalLoanCommand`
+  (siempre disponible, interés fijo alto), `RequestCityLoanCommand` (gateado por prosperidad de la
+  ciudad prestamista, tasa más baja cuanto más rica), `RepayLoanCommand`. Persistencia en
+  `loans.dat`.
 - **MVP 0.5 (Port) en adelante**: solo planificado (`docs/roadmap.md`), sin código. Queda
   pendiente la pregunta de `PortRegistry` vs columnas en `BuildingRegistry`.
 
@@ -52,15 +62,17 @@ simulation-core/   Java puro. CERO dependencias de libGDX/LWJGL/Android — regl
   sim/commands/     Command bus, journal, comandos de terreno (terrain/), ciudad (city/) y
                     economía (economy/)
   sim/population/   BuildingRegistry (agregados por edificio, incluye campos de producción de
-                    Fase 3), PopulationSystem
+                    Fase 3 y cityId del dueño), PopulationSystem (totales por ciudad)
   sim/transport/    RoadNetwork (acceso local por adyacencia — NO es el grafo regional)
   sim/utility/      UtilitySystem (flood-fill de electricidad/agua)
-  sim/economy/      GovernmentFinance/System, GoodType, GoodsLedger, MarketSystem
+  sim/city/         CityRegistry (una GovernmentFinance/GoodsLedger por ciudad fundada, spec §9)
+  sim/economy/      GovernmentFinance/System, GoodType, GoodsLedger, MarketSystem,
+                    LoanRegistry/LoanSystem/LoanLenderType (sistema de préstamos)
   sim/trade/        RegionalGraph (nodos/aristas — adelantado desde MVP 0.4, ver docs/roadmap.md),
                     ShipmentRegistry/System (envíos del TradeDepot, sin streaming visual todavía)
   sim/persistence/  Formato binario propio (magic+versión+CRC32C+escritura atómica), nunca
                     ObjectOutputStream. Un archivo por tipo de estado (world.meta, chunks/*.delta,
-                    settlements.dat, economy.dat, routes.dat, ...)
+                    settlements.dat, cities.dat, routes.dat, loans.dat, ...)
   sim/util/         LongIntHashMap, Histogram — primitivas sin boxing para las rutas calientes
 
 game-client/        libGDX. render/ (IsoProjection, ChunkMesh, WorldRenderer), camera/, ui/,
@@ -68,7 +80,7 @@ game-client/        libGDX. render/ (IsoProjection, ChunkMesh, WorldRenderer), c
 platform-desktop/   Entry point LWJGL3. Casi vacío a propósito.
 headless-runner/    CLI que corre WorldManager sin gráficos. `--bench chunkgen|city|smoke`.
 benchmark/          JMH. Un archivo por sistema medido (ChunkGeneration, Noise, LongIntHashMap,
-                    RoadNetwork, UtilitySystem, PopulationSystem, GovernmentFinance).
+                    RoadNetwork, UtilitySystem, PopulationSystem, GovernmentFinance, LoanSystem).
 docs/                architecture.md (reglas + validación), roadmap.md (plan MVP 0.3+)
 ```
 
