@@ -1,6 +1,5 @@
 package com.kosmos.atlas.benchmark;
 
-import com.kosmos.atlas.sim.economy.GovernmentFinance;
 import com.kosmos.atlas.sim.economy.GovernmentFinanceSystem;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -25,18 +24,16 @@ public class GovernmentFinanceBenchmark {
 
     private BenchmarkCityFixture city;
     private GovernmentFinanceSystem financeSystem;
-    private GovernmentFinance finance;
 
     @Setup(Level.Trial)
     public void setup() {
         city = new BenchmarkCityFixture(5, 8);
         city.settle(30);
         financeSystem = new GovernmentFinanceSystem();
-        finance = new GovernmentFinance();
     }
 
     @Benchmark
     public void tick() {
-        financeSystem.tick(city.buildings, finance);
+        financeSystem.tick(city.buildings, city.cities);
     }
 }

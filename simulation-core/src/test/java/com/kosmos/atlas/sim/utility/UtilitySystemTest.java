@@ -33,7 +33,7 @@ class UtilitySystemTest {
         store.put(chunk);
 
         BuildingRegistry buildings = new BuildingRegistry();
-        int plantId = buildings.create(BuildingType.POWER_PLANT, 5, 5);
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 5, 5, 1);
         chunk.buildingId[Chunk.tileIndex(5, 5)] = plantId;
 
         new UtilitySystem().update(store, buildings);
@@ -54,7 +54,7 @@ class UtilitySystemTest {
             store.put(chunk);
         }
         BuildingRegistry buildings = new BuildingRegistry();
-        int towerId = buildings.create(BuildingType.WATER_TOWER, 0, 0);
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 0, 0, 1);
         store.get(0, 0).buildingId[Chunk.tileIndex(0, 0)] = towerId;
 
         new UtilitySystem().update(store, buildings);
@@ -73,7 +73,7 @@ class UtilitySystemTest {
         store.put(chunk);
 
         BuildingRegistry buildings = new BuildingRegistry();
-        int plantId = buildings.create(BuildingType.POWER_PLANT, 5, 5);
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 5, 5, 1);
         chunk.buildingId[Chunk.tileIndex(5, 5)] = plantId;
 
         UtilitySystem utilitySystem = new UtilitySystem();

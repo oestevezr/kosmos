@@ -1,8 +1,8 @@
 package com.kosmos.atlas.sim.commands.city;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.commands.CommandResult;
 import com.kosmos.atlas.sim.commands.SimulationContext;
-import com.kosmos.atlas.sim.economy.GovernmentFinance;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.world.Chunk;
@@ -19,7 +19,8 @@ class CityCommandsTest {
 
     private ChunkStore store;
     private BuildingRegistry buildings;
-    private GovernmentFinance finance;
+    private CityRegistry cities;
+    private int cityId;
 
     @BeforeEach
     void setUp() {
@@ -32,11 +33,12 @@ class CityCommandsTest {
         chunk.terrainType[Chunk.tileIndex(1, 1)] = WorldConstants.TERRAIN_DEEP_WATER;
         store.put(chunk);
         buildings = new BuildingRegistry();
-        finance = new GovernmentFinance();
+        cities = new CityRegistry();
+        cityId = cities.create("Testville", 5, 5, 0);
     }
 
     private SimulationContext ctx() {
-        return new SimulationContext(store, buildings, finance, 4096, 0);
+        return new SimulationContext(store, buildings, cities, 4096, 0);
     }
 
     @Test
@@ -106,15 +108,15 @@ class CityCommandsTest {
 
     @Test
     void setTaxPolicyUpdatesRateAndRejectsOutOfRange() {
-        assertEquals(CommandResult.ACCEPTED, new SetTaxPolicyCommand(WorldConstants.ZONE_RESIDENTIAL, 0.25).apply(ctx()));
-        assertEquals(0.25, finance.taxRate(WorldConstants.ZONE_RESIDENTIAL));
+        assertEquals(CommandResult.ACCEPTED, new SetTaxPolicyCommand(cityId, WorldConstants.ZONE_RESIDENTIAL, 0.25).apply(ctx()));
+        assertEquals(0.25, cities.finance(cityId).taxRate(WorldConstants.ZONE_RESIDENTIAL));
         assertEquals(CommandResult.REJECTED_INVALID_TERRAIN,
-            new SetTaxPolicyCommand(WorldConstants.ZONE_RESIDENTIAL, 1.5).apply(ctx()));
+            new SetTaxPolicyCommand(cityId, WorldConstants.ZONE_RESIDENTIAL, 1.5).apply(ctx()));
     }
 
     @Test
     void commandsOutsideWorldBoundsAreRejected() {
-        SimulationContext tinyWorld = new SimulationContext(store, buildings, finance, 4, 0);
+        SimulationContext tinyWorld = new SimulationContext(store, buildings, cities, 4, 0);
         assertEquals(CommandResult.REJECTED_OUT_OF_BOUNDS, new BuildRoadCommand(999, 999).apply(tinyWorld));
     }
 

@@ -1,6 +1,6 @@
 package com.kosmos.atlas.sim.persistence;
 
-import com.kosmos.atlas.sim.economy.GoodsLedger;
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
@@ -51,14 +51,14 @@ public final class SaveManager {
         save(worldName, meta, chunkStore, buildings, null);
     }
 
-    /** As {@link #save(String, WorldMeta, ChunkStore, BuildingRegistry)}, also writing {@code economy.dat} if {@code goodsLedger} is non-null. */
-    public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings, GoodsLedger goodsLedger) throws IOException {
-        save(worldName, meta, chunkStore, buildings, goodsLedger, null);
+    /** As {@link #save(String, WorldMeta, ChunkStore, BuildingRegistry)}, also writing {@code cities.dat} if {@code cities} is non-null. */
+    public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings, CityRegistry cities) throws IOException {
+        save(worldName, meta, chunkStore, buildings, cities, null);
     }
 
     /** As above, also writing {@code routes.dat} (in-flight shipments, spec §31) if {@code shipments} is non-null. */
     public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings,
-                      GoodsLedger goodsLedger, ShipmentRegistry shipments) throws IOException {
+                      CityRegistry cities, ShipmentRegistry shipments) throws IOException {
         Path worldDir = resolveWorldDir(worldName);
         meta.writeTo(worldDir.resolve("world.meta"));
 
@@ -84,8 +84,8 @@ public final class SaveManager {
         if (buildings != null) {
             BuildingRegistryIO.write(worldDir.resolve("settlements.dat"), buildings);
         }
-        if (goodsLedger != null) {
-            GoodsLedgerIO.write(worldDir.resolve("economy.dat"), goodsLedger);
+        if (cities != null) {
+            CityRegistryIO.write(worldDir.resolve("cities.dat"), cities);
         }
         if (shipments != null) {
             ShipmentRegistryIO.write(worldDir.resolve("routes.dat"), shipments);
@@ -105,12 +105,12 @@ public final class SaveManager {
         return BuildingRegistryIO.read(resolveWorldDir(worldName).resolve("settlements.dat"));
     }
 
-    public boolean hasGoodsLedger(String worldName) throws IOException {
-        return Files.isRegularFile(resolveWorldDir(worldName).resolve("economy.dat"));
+    public boolean hasCities(String worldName) throws IOException {
+        return Files.isRegularFile(resolveWorldDir(worldName).resolve("cities.dat"));
     }
 
-    public GoodsLedger loadGoodsLedger(String worldName) throws IOException {
-        return GoodsLedgerIO.read(resolveWorldDir(worldName).resolve("economy.dat"));
+    public CityRegistry loadCities(String worldName) throws IOException {
+        return CityRegistryIO.read(resolveWorldDir(worldName).resolve("cities.dat"));
     }
 
     public boolean hasShipments(String worldName) throws IOException {

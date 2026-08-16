@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.economy;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.trade.NodeType;
@@ -8,28 +9,30 @@ import com.kosmos.atlas.sim.trade.ShipmentKind;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
 
 /**
- * Drives the {@code Production -> Logistics -> Consumption} loop spec §20 asks for, at
- * city-wide granularity (spec §22 "primarily at building or district level" applied to goods,
- * not just population). Runs on the {@code WorldManager} scheduler at a low cadence, same tier as
- * {@link GovernmentFinanceSystem}.
+ * Drives the {@code Production -> Logistics -> Consumption} loop spec §20 asks for, once per
+ * active city (spec §9: multiple player-founded cities each have their own
+ * {@code Production[Good]/Demand[Good]/Inventory[Good]/Price[Good]}, per spec §20's model applied
+ * per city rather than per world). Runs on the {@code WorldManager} scheduler at a low cadence,
+ * same tier as {@link GovernmentFinanceSystem}.
  *
- * <p>One tick, in order:
+ * <p>Per city, one tick, in order:
  * <ol>
- *   <li>production buildings turn input goods (if any) into output goods, in {@code BuildingRegistry}
- *       id order — a building fed by another one created earlier (a lower id) sees that tick's
- *       fresh output; one created later sees only what was already in inventory before this tick.
- *       This is a deliberate simplification rather than trying to model true same-tick delivery
- *       ordering independent of creation order (spec §20's "understandable rather than
- *       hyper-realistic") — see {@code MarketSystemTest} for the exact id-order semantics;</li>
- *   <li>residential/commercial/industrial buildings consume goods proportional to
+ *   <li>that city's production buildings turn input goods (if any) into output goods, in
+ *       {@code BuildingRegistry} id order — a building fed by another one created earlier (a
+ *       lower id) sees that tick's fresh output; one created later sees only what was already in
+ *       inventory before this tick. This is a deliberate simplification rather than trying to
+ *       model true same-tick delivery ordering independent of creation order (spec §20's
+ *       "understandable rather than hyper-realistic") — see {@code MarketSystemTest} for the
+ *       exact id-order semantics;</li>
+ *   <li>that city's residential/commercial/industrial buildings consume goods proportional to
  *       population/jobs;</li>
- *   <li>every active {@code TradeDepot} that's running short on a good or sitting on a surplus
- *       creates a {@code Shipment} (spec §14) rather than trading instantly — see
- *       {@code ShipmentSystem} for when the goods/money actually move — up to
+ *   <li>every active {@code TradeDepot} belonging to that city that's running short on a good or
+ *       sitting on a surplus creates a {@code Shipment} (spec §14) rather than trading instantly —
+ *       see {@code ShipmentSystem} for when the goods/money actually move — up to
  *       {@link #MAX_CONCURRENT_SHIPMENTS_PER_DEPOT} shipments in flight per depot at once
  *       (spec §17's bottleneck example: demand beyond capacity delays cargo rather than being
  *       silently unlimited);</li>
- *   <li>transport cost per good is re-derived from the average distance of that good's producers
+ *   <li>transport cost per good is re-derived from the average distance of that city's producers
  *       to the nearest external-market node (spec §20: "transport cost contributes to final
  *       price"), and prices are recomputed from the resulting inventory levels.</li>
  * </ol>
@@ -49,20 +52,26 @@ public final class MarketSystem {
     private static final double STEEL_PER_INDUSTRIAL_JOB = 0.03;
     private static final double CONSTRUCTION_MATERIALS_PER_INDUSTRIAL_JOB = 0.03;
 
-    public void tick(BuildingRegistry buildings, GoodsLedger ledger, GovernmentFinance finance,
-                      RegionalGraph graph, ShipmentRegistry shipments, long currentTick) {
+    public void tick(BuildingRegistry buildings, CityRegistry cities, RegionalGraph graph,
+                      ShipmentRegistry shipments, long currentTick) {
+        cities.forEachActive(cityId -> tickOneCity(buildings, cities, cityId, graph, shipments, currentTick));
+    }
+
+    private void tickOneCity(BuildingRegistry buildings, CityRegistry cities, int cityId,
+                              RegionalGraph graph, ShipmentRegistry shipments, long currentTick) {
+        GoodsLedger ledger = cities.ledger(cityId);
         ledger.beginTick();
-        runProduction(buildings, ledger);
-        runConsumption(buildings, ledger);
-        runTradeDepots(buildings, ledger, finance, shipments, currentTick);
-        updateTransportCosts(buildings, ledger, graph);
+        runProduction(buildings, cityId, ledger);
+        runConsumption(buildings, cityId, ledger);
+        runTradeDepots(buildings, cityId, ledger, cities.finance(cityId), shipments, currentTick);
+        updateTransportCosts(buildings, cityId, ledger, graph);
         ledger.repriceAll();
     }
 
-    private void runProduction(BuildingRegistry buildings, GoodsLedger ledger) {
+    private void runProduction(BuildingRegistry buildings, int cityId, GoodsLedger ledger) {
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
-            if (!buildings.isActive(id)) {
+            if (!buildings.isActive(id) || buildings.cityId(id) != cityId) {
                 continue;
             }
             byte output = buildings.outputGood(id);
@@ -82,10 +91,10 @@ public final class MarketSystem {
         }
     }
 
-    private void runConsumption(BuildingRegistry buildings, GoodsLedger ledger) {
+    private void runConsumption(BuildingRegistry buildings, int cityId, GoodsLedger ledger) {
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
-            if (!buildings.isActive(id)) {
+            if (!buildings.isActive(id) || buildings.cityId(id) != cityId) {
                 continue;
             }
             switch (buildings.type(id)) {
@@ -108,11 +117,11 @@ public final class MarketSystem {
         }
     }
 
-    private void runTradeDepots(BuildingRegistry buildings, GoodsLedger ledger, GovernmentFinance finance,
+    private void runTradeDepots(BuildingRegistry buildings, int cityId, GoodsLedger ledger, GovernmentFinance finance,
                                  ShipmentRegistry shipments, long currentTick) {
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
-            if (!buildings.isActive(id) || buildings.type(id) != BuildingType.TRADE_DEPOT) {
+            if (!buildings.isActive(id) || buildings.cityId(id) != cityId || buildings.type(id) != BuildingType.TRADE_DEPOT) {
                 continue;
             }
             if (shipments.countActiveForDepot(id) >= MAX_CONCURRENT_SHIPMENTS_PER_DEPOT) {
@@ -122,7 +131,7 @@ public final class MarketSystem {
                 if (shipments.countActiveForDepot(id) >= MAX_CONCURRENT_SHIPMENTS_PER_DEPOT) {
                     break; // filled the depot's remaining slots partway through the good list
                 }
-                tradeOneGood(ledger, finance, shipments, id, currentTick, good);
+                tradeOneGood(ledger, finance, shipments, id, cityId, currentTick, good);
             }
         }
     }
@@ -135,7 +144,7 @@ public final class MarketSystem {
      * javadoc for why the two sides of a trade are split that way.
      */
     private void tradeOneGood(GoodsLedger ledger, GovernmentFinance finance, ShipmentRegistry shipments,
-                               int depotId, long currentTick, byte good) {
+                               int depotId, int cityId, long currentTick, byte good) {
         int inventory = ledger.inventory(good);
         int target = ledger.targetInventory(good);
         long eta = currentTick + SHIPMENT_TRAVEL_TICKS;
@@ -145,23 +154,23 @@ public final class MarketSystem {
                 return;
             }
             finance.adjustTreasury(-imported * ledger.price(good));
-            shipments.create(ShipmentKind.IMPORT, good, imported, depotId, currentTick, eta);
+            shipments.create(ShipmentKind.IMPORT, good, imported, depotId, cityId, currentTick, eta);
         } else if (inventory > target + target / 2) {
             int exported = ledger.exportGood(good, Math.min(inventory - (target + target / 2), TRADE_DEPOT_CAPACITY_PER_TICK));
             if (exported <= 0) {
                 return;
             }
-            shipments.create(ShipmentKind.EXPORT, good, exported, depotId, currentTick, eta);
+            shipments.create(ShipmentKind.EXPORT, good, exported, depotId, cityId, currentTick, eta);
         }
     }
 
-    private void updateTransportCosts(BuildingRegistry buildings, GoodsLedger ledger, RegionalGraph graph) {
+    private void updateTransportCosts(BuildingRegistry buildings, int cityId, GoodsLedger ledger, RegionalGraph graph) {
         long[] distanceSum = new long[GoodType.COUNT];
         int[] producerCount = new int[GoodType.COUNT];
 
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
-            if (!buildings.isActive(id)) {
+            if (!buildings.isActive(id) || buildings.cityId(id) != cityId) {
                 continue;
             }
             byte output = buildings.outputGood(id);

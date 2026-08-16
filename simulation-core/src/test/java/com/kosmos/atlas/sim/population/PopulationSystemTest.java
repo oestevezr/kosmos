@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.population;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.transport.RoadNetwork;
 import com.kosmos.atlas.sim.utility.UtilitySystem;
 import com.kosmos.atlas.sim.world.Chunk;
@@ -15,6 +16,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * same RoadNetwork/UtilitySystem a real WorldManager would run before PopulationSystem each tick.
  */
 class PopulationSystemTest {
+
+    private static CityRegistry oneCity() {
+        CityRegistry cities = new CityRegistry();
+        cities.create("Testville", 10, 10, 0);
+        return cities;
+    }
 
     private ChunkStore buildServicedChunk() {
         ChunkStore store = new ChunkStore(4);
@@ -43,15 +50,16 @@ class PopulationSystemTest {
         chunk.zoneType[Chunk.tileIndex(5, 5)] = WorldConstants.ZONE_RESIDENTIAL;
         store.put(chunk);
 
+        CityRegistry cities = oneCity();
         BuildingRegistry buildings = new BuildingRegistry();
         PopulationSystem system = new PopulationSystem();
         for (int i = 0; i < 5; i++) {
             refreshServices(store, buildings);
-            system.tick(store, buildings);
+            system.tick(store, buildings, cities);
         }
 
         assertEquals(WorldConstants.NO_BUILDING, chunk.buildingId[Chunk.tileIndex(5, 5)]);
-        assertEquals(0, system.totalResidentialPopulation());
+        assertEquals(0, system.totalResidentialPopulation(1));
     }
 
     @Test
@@ -60,15 +68,16 @@ class PopulationSystemTest {
         Chunk chunk = store.get(0, 0);
         chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
 
+        CityRegistry cities = oneCity();
         BuildingRegistry buildings = new BuildingRegistry();
-        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20);
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
         chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
-        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21);
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
         chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
 
         PopulationSystem system = new PopulationSystem();
         refreshServices(store, buildings);
-        system.tick(store, buildings);
+        system.tick(store, buildings, cities);
 
         int builtId = chunk.buildingId[Chunk.tileIndex(11, 5)];
         assertTrue(builtId != WorldConstants.NO_BUILDING, "a serviced residential zone must settle");
@@ -83,20 +92,21 @@ class PopulationSystemTest {
         chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
         chunk.zoneType[Chunk.tileIndex(9, 5)] = WorldConstants.ZONE_COMMERCIAL;
 
+        CityRegistry cities = oneCity();
         BuildingRegistry buildings = new BuildingRegistry();
-        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20);
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
         chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
-        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21);
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
         chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
 
         PopulationSystem system = new PopulationSystem();
         for (int i = 0; i < 20; i++) {
             refreshServices(store, buildings);
-            system.tick(store, buildings);
+            system.tick(store, buildings, cities);
         }
 
-        assertTrue(system.totalResidentialPopulation() > 6, "population should grow past its seed value given jobs demand");
-        assertTrue(system.totalCommercialJobs() > 6, "jobs should grow past seed value given workforce demand");
+        assertTrue(system.totalResidentialPopulation(1) > 6, "population should grow past its seed value given jobs demand");
+        assertTrue(system.totalCommercialJobs(1) > 6, "jobs should grow past seed value given workforce demand");
     }
 
     @Test
@@ -106,15 +116,16 @@ class PopulationSystemTest {
         chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
         chunk.zoneType[Chunk.tileIndex(9, 5)] = WorldConstants.ZONE_COMMERCIAL;
 
+        CityRegistry cities = oneCity();
         BuildingRegistry buildings = new BuildingRegistry();
-        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20);
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
         chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
-        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21);
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
         chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
 
         PopulationSystem system = new PopulationSystem();
         refreshServices(store, buildings);
-        system.tick(store, buildings); // settle both zones
+        system.tick(store, buildings, cities); // settle both zones
 
         // Remove utilities entirely.
         buildings.demolish(plantId);
@@ -122,11 +133,11 @@ class PopulationSystemTest {
         chunk.buildingId[Chunk.tileIndex(10, 20)] = WorldConstants.NO_BUILDING;
         chunk.buildingId[Chunk.tileIndex(10, 21)] = WorldConstants.NO_BUILDING;
 
-        long before = system.totalResidentialPopulation();
+        long before = system.totalResidentialPopulation(1);
         for (int i = 0; i < 10; i++) {
             refreshServices(store, buildings);
-            system.tick(store, buildings);
+            system.tick(store, buildings, cities);
         }
-        assertEquals(before, system.totalResidentialPopulation(), "unserviced buildings must not keep growing");
+        assertEquals(before, system.totalResidentialPopulation(1), "unserviced buildings must not keep growing");
     }
 }

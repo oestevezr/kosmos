@@ -1,9 +1,12 @@
 package com.kosmos.atlas.sim.population;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
 import com.kosmos.atlas.sim.world.WorldConstants;
 import com.kosmos.atlas.sim.world.WorldTileAccess;
+
+import java.util.Arrays;
 
 /**
  * Grows population and jobs at building granularity from the conditions the player has created —
@@ -14,12 +17,14 @@ import com.kosmos.atlas.sim.world.WorldTileAccess;
  * <p>Two things happen every time this runs, at the cadence {@code WorldManager} registers it:
  * <ol>
  *   <li><b>Settlement</b>: an empty zoned tile with road access, power and water spawns a new
- *       building (spec §52's "habitation becomes viable -> first population arrives").</li>
+ *       building, owned by the nearest founded {@code City} (spec §52's "habitation becomes
+ *       viable -> first population arrives"; spec §9 on multiple player-founded cities). A tile
+ *       with no founded city anywhere near it simply never settles.</li>
  *   <li><b>Growth</b>: existing serviced buildings grow toward a capacity, throttled by a simple
- *       jobs<->housing balance — residential growth needs jobs to exist citywide, commercial/
- *       industrial job growth needs residents to fill them. This is the feedback loop spec §23
- *       describes, kept deliberately simple per spec §20 ("MVP economy should be understandable
- *       rather than hyper-realistic").</li>
+ *       jobs&lt;-&gt;housing balance scoped to their <em>own</em> city — a booming city's job
+ *       market doesn't pull residents into a different city's houses. This is the feedback loop
+ *       spec §23 describes, kept deliberately simple per spec §20 ("MVP economy should be
+ *       understandable rather than hyper-realistic").</li>
  * </ol>
  * Unserviced buildings neither grow nor spawn; their satisfaction decays instead, giving the
  * player a visible signal (spec §23 lists satisfaction/services as growth inputs) without yet
@@ -39,57 +44,68 @@ public final class PopulationSystem {
     private static final int REQUIRED_SERVICE_MASK =
         WorldConstants.SERVICE_ROAD_ACCESS | WorldConstants.SERVICE_POWERED | WorldConstants.SERVICE_WATERED;
 
-    private long totalResidentialPopulation;
-    private long totalCommercialJobs;
-    private long totalIndustrialJobs;
+    // Per-city totals, indexed by cityId — grown lazily to match CityRegistry.highWaterMark().
+    // A handful of cities (spec §42.3's CITY aggregation tier), so plain arrays sized to city
+    // count are trivial; this is not the per-building/per-tile hot path §42.4 warns about.
+    private long[] totalResidentialPopulationByCity = new long[4];
+    private long[] totalCommercialJobsByCity = new long[4];
+    private long[] totalIndustrialJobsByCity = new long[4];
 
-    public long totalResidentialPopulation() {
-        return totalResidentialPopulation;
+    public long totalResidentialPopulation(int cityId) {
+        return cityId < totalResidentialPopulationByCity.length ? totalResidentialPopulationByCity[cityId] : 0;
     }
 
-    public long totalCommercialJobs() {
-        return totalCommercialJobs;
+    public long totalCommercialJobs(int cityId) {
+        return cityId < totalCommercialJobsByCity.length ? totalCommercialJobsByCity[cityId] : 0;
     }
 
-    public long totalIndustrialJobs() {
-        return totalIndustrialJobs;
+    public long totalIndustrialJobs(int cityId) {
+        return cityId < totalIndustrialJobsByCity.length ? totalIndustrialJobsByCity[cityId] : 0;
     }
 
-    public void tick(ChunkStore store, BuildingRegistry buildings) {
+    public void tick(ChunkStore store, BuildingRegistry buildings, CityRegistry cities) {
+        ensureCapacity(cities.highWaterMark());
         recomputeCityTotals(buildings);
         growExistingBuildings(store, buildings);
-        settleEmptyZonedTiles(store, buildings);
+        settleEmptyZonedTiles(store, buildings, cities);
         recomputeCityTotals(buildings); // reflect any spawns from this same tick in the public totals
+    }
+
+    private void ensureCapacity(int cityHighWaterMark) {
+        if (cityHighWaterMark <= totalResidentialPopulationByCity.length) {
+            return;
+        }
+        int newCapacity = Math.max(cityHighWaterMark, totalResidentialPopulationByCity.length * 2);
+        totalResidentialPopulationByCity = Arrays.copyOf(totalResidentialPopulationByCity, newCapacity);
+        totalCommercialJobsByCity = Arrays.copyOf(totalCommercialJobsByCity, newCapacity);
+        totalIndustrialJobsByCity = Arrays.copyOf(totalIndustrialJobsByCity, newCapacity);
     }
 
     private void recomputeCityTotals(BuildingRegistry buildings) {
         // A plain indexed loop instead of forEachActive(id -> ...) here: accumulating into local
         // totals from inside a lambda would otherwise force the classic single-element-array
-        // boxing trick (three `long[] x = {0}` per call) just to work around Java's "effectively
-        // final" capture rule. This runs every population tick (spec §41 cadence), so it's worth
-        // keeping allocation-free the same way the sim's other hot loops are (spec §42.4).
-        long residential = 0;
-        long commercial = 0;
-        long industrial = 0;
+        // boxing trick just to work around Java's "effectively final" capture rule. This runs
+        // every population tick (spec §41 cadence), so it's worth keeping allocation-free the
+        // same way the sim's other hot loops are (spec §42.4).
+        Arrays.fill(totalResidentialPopulationByCity, 0);
+        Arrays.fill(totalCommercialJobsByCity, 0);
+        Arrays.fill(totalIndustrialJobsByCity, 0);
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
             if (!buildings.isActive(id)) {
                 continue;
             }
+            int cityId = buildings.cityId(id);
             switch (buildings.type(id)) {
-                case BuildingType.RESIDENTIAL -> residential += buildings.population(id);
-                case BuildingType.COMMERCIAL -> commercial += buildings.jobs(id);
-                case BuildingType.INDUSTRIAL -> industrial += buildings.jobs(id);
+                case BuildingType.RESIDENTIAL -> totalResidentialPopulationByCity[cityId] += buildings.population(id);
+                case BuildingType.COMMERCIAL -> totalCommercialJobsByCity[cityId] += buildings.jobs(id);
+                case BuildingType.INDUSTRIAL -> totalIndustrialJobsByCity[cityId] += buildings.jobs(id);
                 default -> { /* power plants / water towers don't contribute population or jobs */ }
             }
         }
-        totalResidentialPopulation = residential;
-        totalCommercialJobs = commercial;
-        totalIndustrialJobs = industrial;
     }
 
     private void growExistingBuildings(ChunkStore store, BuildingRegistry buildings) {
-        long totalJobs = totalCommercialJobs + totalIndustrialJobs;
         buildings.forEachActive(id -> {
             byte type = buildings.type(id);
             if (type != BuildingType.RESIDENTIAL && type != BuildingType.COMMERCIAL && type != BuildingType.INDUSTRIAL) {
@@ -102,20 +118,22 @@ public final class PopulationSystem {
             }
             buildings.setSatisfactionPercent(id, buildings.satisfactionPercent(id) + SATISFACTION_RECOVERY_STEP);
 
+            int cityId = buildings.cityId(id);
             if (type == BuildingType.RESIDENTIAL) {
-                growResidential(buildings, id, totalJobs);
+                growResidential(buildings, id, cityId);
             } else {
-                growWorkplace(buildings, id);
+                growWorkplace(buildings, id, cityId);
             }
         });
     }
 
-    private void growResidential(BuildingRegistry buildings, int id, long totalJobs) {
+    private void growResidential(BuildingRegistry buildings, int id, int cityId) {
         int current = buildings.population(id);
         if (current >= RESIDENTIAL_CAPACITY) {
             return;
         }
-        double demandFactor = clamp01((double) totalJobs / Math.max(1, totalResidentialPopulation + 1));
+        long totalJobs = totalCommercialJobs(cityId) + totalIndustrialJobs(cityId);
+        double demandFactor = clamp01((double) totalJobs / Math.max(1, totalResidentialPopulation(cityId) + 1));
         int growth = (int) Math.round(GROWTH_STEP * demandFactor);
         if (growth <= 0) {
             return;
@@ -123,13 +141,13 @@ public final class PopulationSystem {
         buildings.setPopulation(id, Math.min(RESIDENTIAL_CAPACITY, current + growth));
     }
 
-    private void growWorkplace(BuildingRegistry buildings, int id) {
+    private void growWorkplace(BuildingRegistry buildings, int id, int cityId) {
         int current = buildings.jobs(id);
         if (current >= JOB_CAPACITY) {
             return;
         }
-        long totalJobs = totalCommercialJobs + totalIndustrialJobs;
-        double workforceFactor = clamp01((double) totalResidentialPopulation / Math.max(1, totalJobs + 1));
+        long totalJobs = totalCommercialJobs(cityId) + totalIndustrialJobs(cityId);
+        double workforceFactor = clamp01((double) totalResidentialPopulation(cityId) / Math.max(1, totalJobs + 1));
         int growth = (int) Math.round(GROWTH_STEP * workforceFactor);
         if (growth <= 0) {
             return;
@@ -137,7 +155,7 @@ public final class PopulationSystem {
         buildings.setJobs(id, Math.min(JOB_CAPACITY, current + growth));
     }
 
-    private void settleEmptyZonedTiles(ChunkStore store, BuildingRegistry buildings) {
+    private void settleEmptyZonedTiles(ChunkStore store, BuildingRegistry buildings, CityRegistry cities) {
         store.forEach(chunk -> {
             int baseX = chunk.chunkX() * WorldConstants.CHUNK_SIZE;
             int baseY = chunk.chunkY() * WorldConstants.CHUNK_SIZE;
@@ -151,7 +169,13 @@ public final class PopulationSystem {
                     if ((flags & REQUIRED_SERVICE_MASK) != REQUIRED_SERVICE_MASK) {
                         continue;
                     }
-                    int id = buildings.create(zoneToBuildingType(chunk.zoneType[idx]), baseX + lx, baseY + ly);
+                    int worldTileX = baseX + lx;
+                    int worldTileY = baseY + ly;
+                    int cityId = cities.nearestCity(worldTileX, worldTileY);
+                    if (cityId < 0) {
+                        continue; // no city founded anywhere yet — nothing to attribute this building to
+                    }
+                    int id = buildings.create(zoneToBuildingType(chunk.zoneType[idx]), worldTileX, worldTileY, cityId);
                     if (chunk.zoneType[idx] == WorldConstants.ZONE_RESIDENTIAL) {
                         buildings.setPopulation(id, SEED_POPULATION);
                     } else {

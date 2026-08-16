@@ -3,7 +3,9 @@ package com.kosmos.atlas.sim.persistence;
 import com.kosmos.atlas.sim.economy.GoodType;
 import com.kosmos.atlas.sim.economy.GoodsLedger;
 
+import java.io.DataInput;
 import java.io.DataInputStream;
+import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -18,6 +20,11 @@ import java.nio.file.Path;
  * (price via {@link GoodsLedger#repriceAll()}, transport cost from the current
  * {@code RegionalGraph}), the same "don't persist what you can recompute" rule
  * {@code Chunk.serviceFlags} already follows.
+ *
+ * <p>{@link #writeInto}/{@link #readInto} expose the same per-good encoding without the file
+ * envelope (magic/version/CRC block), so {@code CityRegistryIO} can embed one ledger per city
+ * inside {@code cities.dat} instead of duplicating this logic — the standalone {@code write}/
+ * {@code read} methods below remain for any single-ledger use.
  */
 public final class GoodsLedgerIO {
 
@@ -33,12 +40,7 @@ public final class GoodsLedgerIO {
 
             java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream(MAX_PAYLOAD);
             DataOutputStream body = new DataOutputStream(buf);
-            body.writeInt(GoodType.COUNT);
-            for (byte g = 0; g < GoodType.COUNT; g++) {
-                body.writeInt(ledger.inventory(g));
-                body.writeDouble(ledger.basePrice(g));
-                body.writeInt(ledger.targetInventory(g));
-            }
+            writeInto(body, ledger);
             BinaryBlockIO.writeBlock(out, buf.toByteArray());
         });
     }
@@ -57,23 +59,43 @@ public final class GoodsLedgerIO {
             }
             byte[] body = BinaryBlockIO.readBlock(in, MAX_PAYLOAD);
             DataInputStream bodyIn = new DataInputStream(new java.io.ByteArrayInputStream(body));
-            int goodCount = bodyIn.readInt();
-            if (goodCount != GoodType.COUNT) {
-                throw new SaveCorruptedException(
-                    "economy.dat: good count mismatch (file has " + goodCount + ", build expects " + GoodType.COUNT + ")");
-            }
-            GoodsLedger ledger = new GoodsLedger();
-            for (byte g = 0; g < GoodType.COUNT; g++) {
-                int inventory = bodyIn.readInt();
-                double basePrice = bodyIn.readDouble();
-                int targetInventory = bodyIn.readInt();
-                ledger.setInventory(g, inventory);
-                ledger.setBasePrice(g, basePrice);
-                ledger.setTargetInventory(g, targetInventory);
-            }
-            ledger.repriceAll();
-            return ledger;
+            return readInto(bodyIn, "economy.dat");
         }
+    }
+
+    /** Writes one {@link GoodsLedger}'s per-good state, with no envelope — for embedding in a larger block. */
+    public static void writeInto(DataOutput out, GoodsLedger ledger) throws IOException {
+        out.writeInt(GoodType.COUNT);
+        for (byte g = 0; g < GoodType.COUNT; g++) {
+            out.writeInt(ledger.inventory(g));
+            out.writeDouble(ledger.basePrice(g));
+            out.writeInt(ledger.targetInventory(g));
+        }
+    }
+
+    /** Reads one {@link GoodsLedger}'s per-good state written by {@link #writeInto}, already repriced. */
+    public static GoodsLedger readInto(DataInput in, String sourceLabel) throws IOException {
+        GoodsLedger ledger = new GoodsLedger();
+        readInto(in, sourceLabel, ledger);
+        return ledger;
+    }
+
+    /** Reads into an existing {@link GoodsLedger} (e.g. one {@code CityRegistry} already owns), already repriced. */
+    public static void readInto(DataInput in, String sourceLabel, GoodsLedger ledger) throws IOException {
+        int goodCount = in.readInt();
+        if (goodCount != GoodType.COUNT) {
+            throw new SaveCorruptedException(
+                sourceLabel + ": good count mismatch (file has " + goodCount + ", build expects " + GoodType.COUNT + ")");
+        }
+        for (byte g = 0; g < GoodType.COUNT; g++) {
+            int inventory = in.readInt();
+            double basePrice = in.readDouble();
+            int targetInventory = in.readInt();
+            ledger.setInventory(g, inventory);
+            ledger.setBasePrice(g, basePrice);
+            ledger.setTargetInventory(g, targetInventory);
+        }
+        ledger.repriceAll();
     }
 
     private GoodsLedgerIO() {

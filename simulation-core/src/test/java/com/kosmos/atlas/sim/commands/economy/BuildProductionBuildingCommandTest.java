@@ -1,9 +1,9 @@
 package com.kosmos.atlas.sim.commands.economy;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.commands.CommandResult;
 import com.kosmos.atlas.sim.commands.SimulationContext;
 import com.kosmos.atlas.sim.economy.GoodType;
-import com.kosmos.atlas.sim.economy.GovernmentFinance;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.trade.NodeType;
@@ -21,6 +21,7 @@ class BuildProductionBuildingCommandTest {
 
     private ChunkStore store;
     private BuildingRegistry buildings;
+    private CityRegistry cities;
     private RegionalGraph graph;
 
     @BeforeEach
@@ -37,11 +38,13 @@ class BuildProductionBuildingCommandTest {
         // tile (10,5) deliberately left with no resource flags
         store.put(chunk);
         buildings = new BuildingRegistry();
+        cities = new CityRegistry();
+        cities.create("Testville", 5, 5, 0);
         graph = new RegionalGraph();
     }
 
     private SimulationContext ctx() {
-        return new SimulationContext(store, buildings, new GovernmentFinance(), graph, 4096, 0);
+        return new SimulationContext(store, buildings, cities, graph, 4096, 0);
     }
 
     @Test

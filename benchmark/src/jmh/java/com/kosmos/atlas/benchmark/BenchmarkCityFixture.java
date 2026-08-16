@@ -1,5 +1,6 @@
 package com.kosmos.atlas.benchmark;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.population.PopulationSystem;
@@ -19,12 +20,16 @@ final class BenchmarkCityFixture {
 
     final ChunkStore store;
     final BuildingRegistry buildings;
+    final CityRegistry cities;
+    final int cityId;
 
     /** {@code chunkSpan} x {@code chunkSpan} chunks of fully-buildable land, roaded every {@code roadSpacing} tiles. */
     BenchmarkCityFixture(int chunkSpan, int roadSpacing) {
         int capacity = chunkSpan * chunkSpan + 4;
         store = new ChunkStore(capacity);
         buildings = new BuildingRegistry();
+        cities = new CityRegistry();
+        cityId = cities.create("Benchmark City", 0, 0, 0);
 
         int half = chunkSpan / 2;
         for (int cx = -half; cx <= half; cx++) {
@@ -63,12 +68,12 @@ final class BenchmarkCityFixture {
             for (int x = worldMinTile; x < worldMaxTile; x += sourceSpacing) {
                 Chunk chunk = store.get(Math.floorDiv(x, WorldConstants.CHUNK_SIZE), Math.floorDiv(y, WorldConstants.CHUNK_SIZE));
                 int idx = Chunk.tileIndex(Math.floorMod(x, WorldConstants.CHUNK_SIZE), Math.floorMod(y, WorldConstants.CHUNK_SIZE));
-                int plantId = buildings.create(BuildingType.POWER_PLANT, x, y);
+                int plantId = buildings.create(BuildingType.POWER_PLANT, x, y, cityId);
                 chunk.buildingId[idx] = plantId;
                 int towerX = Math.min(x + 1, worldMaxTile - 1);
                 Chunk towerChunk = store.get(Math.floorDiv(towerX, WorldConstants.CHUNK_SIZE), Math.floorDiv(y, WorldConstants.CHUNK_SIZE));
                 int towerIdx = Chunk.tileIndex(Math.floorMod(towerX, WorldConstants.CHUNK_SIZE), Math.floorMod(y, WorldConstants.CHUNK_SIZE));
-                int towerId = buildings.create(BuildingType.WATER_TOWER, towerX, y);
+                int towerId = buildings.create(BuildingType.WATER_TOWER, towerX, y, cityId);
                 towerChunk.buildingId[towerIdx] = towerId;
             }
         }
@@ -82,7 +87,7 @@ final class BenchmarkCityFixture {
         for (int i = 0; i < iterations; i++) {
             roadNetwork.update(store);
             utilitySystem.update(store, buildings);
-            populationSystem.tick(store, buildings);
+            populationSystem.tick(store, buildings, cities);
         }
     }
 }

@@ -1,7 +1,6 @@
 package com.kosmos.atlas.benchmark;
 
-import com.kosmos.atlas.sim.economy.GoodsLedger;
-import com.kosmos.atlas.sim.economy.GovernmentFinance;
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.trade.ShipmentKind;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
 import com.kosmos.atlas.sim.trade.ShipmentSystem;
@@ -35,8 +34,7 @@ public class ShipmentSystemBenchmark {
     private static final int ACTIVE_SHIPMENTS = 500;
 
     private ShipmentRegistry shipments;
-    private GoodsLedger ledger;
-    private GovernmentFinance finance;
+    private CityRegistry cities;
     private ShipmentSystem system;
 
     @Setup(Level.Invocation)
@@ -44,22 +42,22 @@ public class ShipmentSystemBenchmark {
         // Fresh per invocation: tick() completes arrived shipments (mutates the registry), so a
         // Level.Trial fixture would shrink across iterations and stop measuring steady-state cost.
         shipments = new ShipmentRegistry(ACTIVE_SHIPMENTS);
+        cities = new CityRegistry();
+        int cityId = cities.create("Benchmark City", 0, 0, 0);
         for (int i = 0; i < ACTIVE_SHIPMENTS; i++) {
             byte kind = (i % 2 == 0) ? ShipmentKind.IMPORT : ShipmentKind.EXPORT;
-            shipments.create(kind, (byte) (i % 8), 10, i % 20, 0, 100); // all arrive at tick 100
+            shipments.create(kind, (byte) (i % 8), 10, i % 20, cityId, 0, 100); // all arrive at tick 100
         }
-        ledger = new GoodsLedger();
-        finance = new GovernmentFinance();
         system = new ShipmentSystem();
     }
 
     @Benchmark
     public void tickWithNoArrivalsYet() {
-        system.tick(50, shipments, ledger, finance); // well before any ETA — pure scan cost
+        system.tick(50, shipments, cities); // well before any ETA — pure scan cost
     }
 
     @Benchmark
     public void tickSettlingAllArrivals() {
-        system.tick(100, shipments, ledger, finance); // every shipment's ETA — full settlement cost
+        system.tick(100, shipments, cities); // every shipment's ETA — full settlement cost
     }
 }

@@ -1,12 +1,11 @@
 package com.kosmos.atlas.sim;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.commands.Command;
 import com.kosmos.atlas.sim.commands.CommandBus;
 import com.kosmos.atlas.sim.commands.CommandJournal;
 import com.kosmos.atlas.sim.commands.CommandResult;
 import com.kosmos.atlas.sim.commands.SimulationContext;
-import com.kosmos.atlas.sim.economy.GoodsLedger;
-import com.kosmos.atlas.sim.economy.GovernmentFinance;
 import com.kosmos.atlas.sim.economy.GovernmentFinanceSystem;
 import com.kosmos.atlas.sim.economy.MarketSystem;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
@@ -29,11 +28,12 @@ import java.io.IOException;
  * simulation exclusively through this class — neither ever reaches into {@code sim.world} or
  * {@code sim.commands} internals directly, which is what keeps the client/headless split honest.
  *
- * <p>Owns the command bus, chunk streaming, the tick scheduler, metrics, and — as of Fase 2 (spec
- * §33 MVP 0.2) — the city-building state: {@link BuildingRegistry}, {@link GovernmentFinance},
- * {@link RoadNetwork} and {@link UtilitySystem}. {@link #update(double)} is the one method a host
- * (render loop or headless loop) calls every frame; everything else is one-time setup or event
- * submission.
+ * <p>Owns the command bus, chunk streaming, the tick scheduler, metrics, and the city-building
+ * state: {@link BuildingRegistry} and {@link CityRegistry} — the latter owning every
+ * player-founded city's own treasury and goods ledger (spec §9), which is what makes "whose money
+ * is this" a well-defined question once more than one city exists. {@link #update(double)} is the
+ * one method a host (render loop or headless loop) calls every frame; everything else is
+ * one-time setup or event submission.
  */
 public final class WorldManager implements AutoCloseable {
 
@@ -58,8 +58,7 @@ public final class WorldManager implements AutoCloseable {
     private final Metrics metrics = new Metrics();
 
     private final BuildingRegistry buildings = new BuildingRegistry();
-    private final GovernmentFinance finance = new GovernmentFinance();
-    private final GoodsLedger goodsLedger = new GoodsLedger();
+    private final CityRegistry cities = new CityRegistry();
     private final RegionalGraph regionalGraph = new RegionalGraph();
     private final ShipmentRegistry shipments = new ShipmentRegistry();
     private final RoadNetwork roadNetwork = new RoadNetwork();
@@ -84,13 +83,13 @@ public final class WorldManager implements AutoCloseable {
         scheduler.register("utilities", UTILITY_CADENCE_TICKS, tick ->
             utilitySystem.update(chunkManager.store(), buildings));
         scheduler.register("population", POPULATION_CADENCE_TICKS, tick ->
-            populationSystem.tick(chunkManager.store(), buildings));
+            populationSystem.tick(chunkManager.store(), buildings, cities));
         scheduler.register("government-finance", FINANCE_CADENCE_TICKS, tick ->
-            financeSystem.tick(buildings, finance));
+            financeSystem.tick(buildings, cities));
         scheduler.register("market", MARKET_CADENCE_TICKS, tick ->
-            marketSystem.tick(buildings, goodsLedger, finance, regionalGraph, shipments, tick));
+            marketSystem.tick(buildings, cities, regionalGraph, shipments, tick));
         scheduler.register("shipments", SHIPMENT_CADENCE_TICKS, tick ->
-            shipmentSystem.tick(tick, shipments, goodsLedger, finance));
+            shipmentSystem.tick(tick, shipments, cities));
     }
 
     public WorldGenSettings genSettings() {
@@ -121,16 +120,12 @@ public final class WorldManager implements AutoCloseable {
         return buildings;
     }
 
-    public GovernmentFinance finance() {
-        return finance;
+    public CityRegistry cities() {
+        return cities;
     }
 
     public PopulationSystem populationSystem() {
         return populationSystem;
-    }
-
-    public GoodsLedger goodsLedger() {
-        return goodsLedger;
     }
 
     public RegionalGraph regionalGraph() {
@@ -178,7 +173,7 @@ public final class WorldManager implements AutoCloseable {
         Command command;
         while ((command = commandBus.poll()) != null) {
             SimulationContext ctx = new SimulationContext(
-                chunkManager.store(), buildings, finance, regionalGraph, genSettings.worldSizeTiles, scheduler.currentTick());
+                chunkManager.store(), buildings, cities, regionalGraph, genSettings.worldSizeTiles, scheduler.currentTick());
             CommandResult result = command.apply(ctx);
             if (result == CommandResult.ACCEPTED) {
                 metrics.onCommandAccepted();

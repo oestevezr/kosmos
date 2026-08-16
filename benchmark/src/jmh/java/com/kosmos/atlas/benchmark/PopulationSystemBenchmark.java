@@ -38,6 +38,6 @@ public class PopulationSystemBenchmark {
 
     @Benchmark
     public void tick() {
-        populationSystem.tick(city.store, city.buildings);
+        populationSystem.tick(city.store, city.buildings, city.cities);
     }
 }

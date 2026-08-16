@@ -5,6 +5,7 @@ import com.kosmos.atlas.sim.WorldManager;
 import com.kosmos.atlas.sim.commands.city.BuildPowerPlantCommand;
 import com.kosmos.atlas.sim.commands.city.BuildRoadCommand;
 import com.kosmos.atlas.sim.commands.city.BuildWaterTowerCommand;
+import com.kosmos.atlas.sim.commands.city.FoundCityCommand;
 import com.kosmos.atlas.sim.commands.city.ZoneCommand;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkManager;
@@ -109,6 +110,10 @@ public final class HeadlessMain {
             return;
         }
 
+        world.submitCommand(new FoundCityCommand(landStart, 16, "Atlas City"));
+        world.update(1.0 / 30.0); // drain the found-city command so the city exists before zoning/building
+        int cityId = world.cities().nearestCity(landStart, 16);
+
         for (int x = landStart; x < landStart + 8; x++) {
             world.submitCommand(new BuildRoadCommand(x, 16));
         }
@@ -134,14 +139,14 @@ public final class HeadlessMain {
         while (simulatedSeconds <= totalRealSeconds) {
             int currentYear = (int) (simulatedSeconds / secondsPerYear);
             if (nextReportIdx < reportYears.length && reportYears[nextReportIdx] <= currentYear) {
-                printYearSnapshot(world, reportYears[nextReportIdx]);
+                printYearSnapshot(world, cityId, reportYears[nextReportIdx]);
                 nextReportIdx++;
             }
             world.update(frameSeconds);
             simulatedSeconds += frameSeconds;
         }
         if (nextReportIdx < reportYears.length) {
-            printYearSnapshot(world, years);
+            printYearSnapshot(world, cityId, years);
         }
 
         long elapsedNanos = System.nanoTime() - startNanos;
@@ -152,13 +157,13 @@ public final class HeadlessMain {
             world.metrics().commandsAccepted(), world.metrics().commandsRejected());
     }
 
-    private static void printYearSnapshot(WorldManager world, int year) {
+    private static void printYearSnapshot(WorldManager world, int cityId, int year) {
         System.out.printf("Year %-4d Population: %-6d Commercial jobs: %-6d Industrial jobs: %-6d Treasury: %.1f%n",
             year,
-            world.populationSystem().totalResidentialPopulation(),
-            world.populationSystem().totalCommercialJobs(),
-            world.populationSystem().totalIndustrialJobs(),
-            world.finance().treasuryBalance());
+            world.populationSystem().totalResidentialPopulation(cityId),
+            world.populationSystem().totalCommercialJobs(cityId),
+            world.populationSystem().totalIndustrialJobs(cityId),
+            world.cities().finance(cityId).treasuryBalance());
     }
 
     private static int findLandRun(byte[] terrainType, int y, int runLength) {

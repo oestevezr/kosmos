@@ -18,8 +18,8 @@ import java.nio.file.Path;
 public final class BuildingRegistryIO {
 
     private static final int MAGIC = 0x41544252; // "ATBR"
-    /** Bumped to 2 in MVP 0.3 to add the production output/input good + rate fields (spec §32). */
-    private static final int FORMAT_VERSION = 2;
+    /** Bumped to 3 in the multi-city refactor to add the owning cityId field (spec §32). */
+    private static final int FORMAT_VERSION = 3;
     private static final int MAX_BUILDINGS = 1 << 22; // ~4M buildings — generous, still bounded
 
     public static void write(Path file, BuildingRegistry registry) throws IOException {
@@ -29,7 +29,7 @@ public final class BuildingRegistryIO {
             out.writeInt(FORMAT_VERSION);
 
             int highWaterMark = registry.highWaterMark();
-            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream(highWaterMark * 28 + 8);
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream(highWaterMark * 32 + 8);
             DataOutputStream body = new DataOutputStream(buf);
             body.writeInt(highWaterMark);
             for (int id = 1; id < highWaterMark; id++) {
@@ -40,6 +40,7 @@ public final class BuildingRegistryIO {
                 body.writeByte(registry.type(id));
                 body.writeInt(registry.tileX(id));
                 body.writeInt(registry.tileY(id));
+                body.writeInt(registry.cityId(id));
                 body.writeInt(registry.population(id));
                 body.writeInt(registry.jobs(id));
                 body.writeByte(registry.incomeLevel(id));
@@ -65,7 +66,7 @@ public final class BuildingRegistryIO {
             if (version != FORMAT_VERSION) {
                 throw new SaveCorruptedException("settlements.dat: unsupported format version " + version);
             }
-            byte[] body = BinaryBlockIO.readBlock(in, MAX_BUILDINGS * 28 + 8);
+            byte[] body = BinaryBlockIO.readBlock(in, MAX_BUILDINGS * 32 + 8);
             DataInputStream bodyIn = new DataInputStream(new java.io.ByteArrayInputStream(body));
             int highWaterMark = bodyIn.readInt();
             if (highWaterMark < 1 || highWaterMark > MAX_BUILDINGS) {
@@ -81,6 +82,7 @@ public final class BuildingRegistryIO {
                 byte type = bodyIn.readByte();
                 int tileX = bodyIn.readInt();
                 int tileY = bodyIn.readInt();
+                int cityId = bodyIn.readInt();
                 int population = bodyIn.readInt();
                 int jobs = bodyIn.readInt();
                 byte incomeLevel = bodyIn.readByte();
@@ -90,7 +92,7 @@ public final class BuildingRegistryIO {
                 int outputRate = bodyIn.readInt();
                 byte inputGood = bodyIn.readByte();
                 int inputRate = bodyIn.readInt();
-                registry.restoreActive(id, type, tileX, tileY, population, jobs,
+                registry.restoreActive(id, type, tileX, tileY, cityId, population, jobs,
                     incomeLevel, employmentRate, satisfaction, outputGood, outputRate, inputGood, inputRate);
             }
             return registry;

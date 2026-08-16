@@ -1,8 +1,6 @@
 package com.kosmos.atlas.benchmark;
 
 import com.kosmos.atlas.sim.economy.GoodType;
-import com.kosmos.atlas.sim.economy.GoodsLedger;
-import com.kosmos.atlas.sim.economy.GovernmentFinance;
 import com.kosmos.atlas.sim.economy.MarketSystem;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.trade.NodeType;
@@ -36,8 +34,6 @@ public class MarketSystemBenchmark {
 
     private BenchmarkCityFixture city;
     private MarketSystem marketSystem;
-    private GoodsLedger ledger;
-    private GovernmentFinance finance;
     private RegionalGraph graph;
     private ShipmentRegistry shipments;
     private long tick;
@@ -47,17 +43,15 @@ public class MarketSystemBenchmark {
         city = new BenchmarkCityFixture(5, 8);
         city.settle(30);
 
-        int farm = city.buildings.create(BuildingType.FARM, -100, -100, GoodType.FOOD, 10, GoodType.NONE, 0);
-        int mine = city.buildings.create(BuildingType.MINE, -99, -100, GoodType.ORE, 8, GoodType.NONE, 0);
-        int mill = city.buildings.create(BuildingType.STEEL_MILL, -98, -100, GoodType.STEEL, 6, GoodType.ORE, 8);
-        int depot = city.buildings.create(BuildingType.TRADE_DEPOT, -97, -100, GoodType.NONE, 0, GoodType.NONE, 0);
+        int farm = city.buildings.create(BuildingType.FARM, -100, -100, city.cityId, GoodType.FOOD, 10, GoodType.NONE, 0);
+        int mine = city.buildings.create(BuildingType.MINE, -99, -100, city.cityId, GoodType.ORE, 8, GoodType.NONE, 0);
+        int mill = city.buildings.create(BuildingType.STEEL_MILL, -98, -100, city.cityId, GoodType.STEEL, 6, GoodType.ORE, 8);
+        int depot = city.buildings.create(BuildingType.TRADE_DEPOT, -97, -100, city.cityId, GoodType.NONE, 0, GoodType.NONE, 0);
         assert farm > 0 && mine > 0 && mill > 0 && depot > 0;
 
         graph = new RegionalGraph();
         graph.addNode(NodeType.EXTERNAL_MARKET, -97, -100);
 
-        ledger = new GoodsLedger();
-        finance = new GovernmentFinance();
         shipments = new ShipmentRegistry();
         marketSystem = new MarketSystem();
         tick = 0;
@@ -65,6 +59,6 @@ public class MarketSystemBenchmark {
 
     @Benchmark
     public void tick() {
-        marketSystem.tick(city.buildings, ledger, finance, graph, shipments, tick++);
+        marketSystem.tick(city.buildings, city.cities, graph, shipments, tick++);
     }
 }

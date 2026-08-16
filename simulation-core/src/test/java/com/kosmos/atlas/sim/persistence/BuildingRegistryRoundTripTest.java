@@ -18,16 +18,16 @@ class BuildingRegistryRoundTripTest {
     @Test
     void activeAndTombstonedBuildingsRoundTrip(@TempDir Path tmp) throws IOException {
         BuildingRegistry original = new BuildingRegistry();
-        int home = original.create(BuildingType.RESIDENTIAL, 10, 20);
+        int home = original.create(BuildingType.RESIDENTIAL, 10, 20, 1);
         original.setPopulation(home, 42);
         original.setIncomeLevel(home, (byte) 2);
         original.setEmploymentRatePercent(home, 77);
         original.setSatisfactionPercent(home, 60);
 
-        int shop = original.create(BuildingType.COMMERCIAL, 11, 20);
+        int shop = original.create(BuildingType.COMMERCIAL, 11, 20, 1);
         original.setJobs(shop, 15);
 
-        int demolished = original.create(BuildingType.INDUSTRIAL, 12, 20);
+        int demolished = original.create(BuildingType.INDUSTRIAL, 12, 20, 1);
         original.demolish(demolished);
 
         Path file = tmp.resolve("settlements.dat");
@@ -39,6 +39,7 @@ class BuildingRegistryRoundTripTest {
         assertEquals(BuildingType.RESIDENTIAL, loaded.type(home));
         assertEquals(10, loaded.tileX(home));
         assertEquals(20, loaded.tileY(home));
+        assertEquals(1, loaded.cityId(home));
         assertEquals(42, loaded.population(home));
         assertEquals(2, loaded.incomeLevel(home));
         assertEquals(77, loaded.employmentRatePercent(home));
@@ -50,7 +51,7 @@ class BuildingRegistryRoundTripTest {
         assertFalse(loaded.isActive(demolished), "a demolished building must load back as inactive");
 
         // The restored free list must still be usable for new construction.
-        int reused = loaded.create(BuildingType.RESIDENTIAL, 99, 99);
+        int reused = loaded.create(BuildingType.RESIDENTIAL, 99, 99, 1);
         assertTrue(loaded.isActive(reused));
     }
 

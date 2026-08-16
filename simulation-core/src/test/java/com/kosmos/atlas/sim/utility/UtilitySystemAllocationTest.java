@@ -34,9 +34,9 @@ class UtilitySystemAllocationTest {
             }
         }
         BuildingRegistry buildings = new BuildingRegistry();
-        int plantId = buildings.create(BuildingType.POWER_PLANT, 5, 5);
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 5, 5, 1);
         store.get(0, 0).buildingId[Chunk.tileIndex(5, 5)] = plantId;
-        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 10);
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 10, 1);
         store.get(0, 0).buildingId[Chunk.tileIndex(10, 10)] = towerId;
 
         UtilitySystem system = new UtilitySystem();

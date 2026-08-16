@@ -18,8 +18,8 @@ class ShipmentRegistryRoundTripTest {
     @Test
     void activeAndCompletedShipmentsRoundTrip(@TempDir Path tmp) throws IOException {
         ShipmentRegistry original = new ShipmentRegistry();
-        int inFlight = original.create(ShipmentKind.IMPORT, (byte) 2, 75, 3, 100, 130);
-        int completed = original.create(ShipmentKind.EXPORT, (byte) 1, 40, 3, 50, 70);
+        int inFlight = original.create(ShipmentKind.IMPORT, (byte) 2, 75, 3, 1, 100, 130);
+        int completed = original.create(ShipmentKind.EXPORT, (byte) 1, 40, 3, 1, 50, 70);
         original.complete(completed);
 
         Path file = tmp.resolve("routes.dat");
@@ -31,13 +31,14 @@ class ShipmentRegistryRoundTripTest {
         assertEquals(2, loaded.commodity(inFlight));
         assertEquals(75, loaded.quantity(inFlight));
         assertEquals(3, loaded.depotBuildingId(inFlight));
+        assertEquals(1, loaded.cityId(inFlight));
         assertEquals(100, loaded.departureTick(inFlight));
         assertEquals(130, loaded.etaTick(inFlight));
 
         assertFalse(loaded.isActive(completed), "a completed shipment must load back as inactive");
 
         // The restored free list must still be usable for new shipments.
-        int reused = loaded.create(ShipmentKind.IMPORT, (byte) 0, 10, 9, 200, 220);
+        int reused = loaded.create(ShipmentKind.IMPORT, (byte) 0, 10, 9, 1, 200, 220);
         assertTrue(loaded.isActive(reused));
     }
 

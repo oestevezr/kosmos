@@ -13,5 +13,9 @@ public enum CommandResult {
     /** A building, road or zone already occupies the target tile in a way that conflicts with this command. */
     REJECTED_TILE_OCCUPIED,
     /** The target tile has no building/road/zone to remove. */
-    REJECTED_NOTHING_TO_DEMOLISH
+    REJECTED_NOTHING_TO_DEMOLISH,
+    /** No city has been founded close enough (or at all) to attribute this building/policy to (spec §9). */
+    REJECTED_NO_CITY_FOUNDED,
+    /** A new city can't be founded this close to an existing one — territory attribution would be meaningless. */
+    REJECTED_TOO_CLOSE_TO_ANOTHER_CITY
 }

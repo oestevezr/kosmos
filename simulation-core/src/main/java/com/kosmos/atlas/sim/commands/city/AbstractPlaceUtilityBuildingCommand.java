@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.commands.city;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.commands.Command;
 import com.kosmos.atlas.sim.commands.CommandResult;
 import com.kosmos.atlas.sim.commands.SimulationContext;
@@ -48,8 +49,14 @@ abstract class AbstractPlaceUtilityBuildingCommand extends Command {
             return CommandResult.REJECTED_TILE_OCCUPIED;
         }
 
+        CityRegistry cities = ctx.requireCities();
+        int cityId = cities.nearestCity(tileX, tileY);
+        if (cityId < 0) {
+            return CommandResult.REJECTED_NO_CITY_FOUNDED;
+        }
+
         BuildingRegistry buildings = ctx.requireBuildings();
-        int id = buildings.create(buildingType(), tileX, tileY);
+        int id = buildings.create(buildingType(), tileX, tileY, cityId);
         chunk.buildingId[idx] = id;
         chunk.zoneType[idx] = WorldConstants.ZONE_NONE; // infrastructure is never a zoned lot
         chunk.markDirty();

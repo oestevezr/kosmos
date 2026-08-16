@@ -1,6 +1,6 @@
 package com.kosmos.atlas.sim.population;
 
-import com.kosmos.atlas.sim.economy.GovernmentFinance;
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.economy.GovernmentFinanceSystem;
 import com.kosmos.atlas.sim.world.ChunkStore;
 import org.junit.jupiter.api.Test;
@@ -28,30 +28,37 @@ class PopulationAndFinanceAllocationTest {
 
     @Test
     void populationSystemTickIsCheapInSteadyState() {
-        BuildingRegistry buildings = seedBuildings();
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = seedBuildings(cities);
         ChunkStore emptyStore = new ChunkStore(1); // no loaded chunks: isolates the totals/growth accounting cost
         PopulationSystem system = new PopulationSystem();
 
-        measureAndAssert("PopulationSystem.tick", () -> system.tick(emptyStore, buildings));
+        measureAndAssert("PopulationSystem.tick", () -> system.tick(emptyStore, buildings, cities));
     }
 
     @Test
     void governmentFinanceSystemTickIsCheapInSteadyState() {
-        BuildingRegistry buildings = seedBuildings();
-        GovernmentFinance finance = new GovernmentFinance();
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = seedBuildings(cities);
         GovernmentFinanceSystem system = new GovernmentFinanceSystem();
 
-        measureAndAssert("GovernmentFinanceSystem.tick", () -> system.tick(buildings, finance));
+        measureAndAssert("GovernmentFinanceSystem.tick", () -> system.tick(buildings, cities));
     }
 
-    private static BuildingRegistry seedBuildings() {
+    private static CityRegistry oneCity() {
+        CityRegistry cities = new CityRegistry();
+        cities.create("Testville", 0, 0, 0);
+        return cities;
+    }
+
+    private static BuildingRegistry seedBuildings(CityRegistry cities) {
         BuildingRegistry buildings = new BuildingRegistry();
         for (int i = 0; i < 200; i++) {
-            int id = buildings.create(BuildingType.RESIDENTIAL, i, 0);
+            int id = buildings.create(BuildingType.RESIDENTIAL, i, 0, 1);
             buildings.setPopulation(id, 30);
         }
         for (int i = 0; i < 100; i++) {
-            int id = buildings.create(BuildingType.COMMERCIAL, i, 1);
+            int id = buildings.create(BuildingType.COMMERCIAL, i, 1, 1);
             buildings.setJobs(id, 15);
         }
         return buildings;

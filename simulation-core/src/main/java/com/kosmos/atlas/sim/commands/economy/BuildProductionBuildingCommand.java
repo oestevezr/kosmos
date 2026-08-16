@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.commands.economy;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.commands.Command;
 import com.kosmos.atlas.sim.commands.CommandDecoder;
 import com.kosmos.atlas.sim.commands.CommandResult;
@@ -78,6 +79,11 @@ public final class BuildProductionBuildingCommand extends Command {
         if (chunk.buildingId[idx] != WorldConstants.NO_BUILDING) {
             return CommandResult.REJECTED_TILE_OCCUPIED;
         }
+        CityRegistry cities = ctx.requireCities();
+        int cityId = cities.nearestCity(tileX, tileY);
+        if (cityId < 0) {
+            return CommandResult.REJECTED_NO_CITY_FOUNDED;
+        }
 
         int resourceFlags = chunk.resourceFlags[idx];
         byte outputGood;
@@ -131,7 +137,7 @@ public final class BuildProductionBuildingCommand extends Command {
         }
 
         BuildingRegistry buildings = ctx.requireBuildings();
-        int id = buildings.create(buildingType, tileX, tileY, outputGood, outputRate, inputGood, inputRate);
+        int id = buildings.create(buildingType, tileX, tileY, cityId, outputGood, outputRate, inputGood, inputRate);
         chunk.buildingId[idx] = id;
         chunk.zoneType[idx] = WorldConstants.ZONE_NONE;
         chunk.markDirty();

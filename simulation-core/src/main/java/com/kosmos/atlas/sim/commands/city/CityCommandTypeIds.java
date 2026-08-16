@@ -8,6 +8,7 @@ public final class CityCommandTypeIds {
     public static final int BUILD_POWER_PLANT = 13;
     public static final int BUILD_WATER_TOWER = 14;
     public static final int SET_TAX_POLICY = 15;
+    public static final int FOUND_CITY = 16;
 
     private CityCommandTypeIds() {
     }

@@ -3,6 +3,7 @@ package com.kosmos.atlas.sim;
 import com.kosmos.atlas.sim.commands.city.BuildPowerPlantCommand;
 import com.kosmos.atlas.sim.commands.city.BuildRoadCommand;
 import com.kosmos.atlas.sim.commands.city.BuildWaterTowerCommand;
+import com.kosmos.atlas.sim.commands.city.FoundCityCommand;
 import com.kosmos.atlas.sim.commands.city.ZoneCommand;
 import com.kosmos.atlas.sim.world.HardwareProfile;
 import com.kosmos.atlas.sim.world.WorldConstants;
@@ -37,6 +38,10 @@ class WorldManagerCityGrowthTest {
             int landRunStart = findLandRun(chunk.terrainType, 16, 6);
             assertTrue(landRunStart >= 0, "expected at least 6 contiguous land tiles at y=16 for this seed");
 
+            assertTrue(world.submitCommand(new FoundCityCommand(landRunStart, 16, "Testville")));
+            world.update(1.0 / 30.0); // drain the found-city command so subsequent commands attribute to it
+            int cityId = world.cities().nearestCity(landRunStart, 16);
+
             for (int x = landRunStart; x < landRunStart + 6; x++) {
                 assertTrue(world.submitCommand(new BuildRoadCommand(x, 16)));
             }
@@ -51,9 +56,9 @@ class WorldManagerCityGrowthTest {
                 world.update(1.0 / 30.0);
             }
 
-            assertTrue(world.populationSystem().totalResidentialPopulation() > 0,
+            assertTrue(world.populationSystem().totalResidentialPopulation(cityId) > 0,
                 "founding a serviced settlement should produce residents within this many ticks");
-            assertTrue(world.finance().treasuryBalance() > 0,
+            assertTrue(world.cities().finance(cityId).treasuryBalance() > 0,
                 "a populated, taxed city should have collected some revenue");
             assertTrue(world.metrics().commandsAccepted() >= 10);
         }

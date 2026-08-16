@@ -19,6 +19,7 @@ public final class ShipmentRegistry {
     private byte[] commodity;
     private int[] quantity;
     private int[] depotBuildingId;
+    private int[] cityId;
     private long[] departureTick;
     private long[] etaTick;
     private boolean[] active;
@@ -38,6 +39,7 @@ public final class ShipmentRegistry {
         commodity = new byte[capacity];
         quantity = new int[capacity];
         depotBuildingId = new int[capacity];
+        cityId = new int[capacity];
         departureTick = new long[capacity];
         etaTick = new long[capacity];
         active = new boolean[capacity];
@@ -53,12 +55,13 @@ public final class ShipmentRegistry {
     }
 
     public int create(byte shipmentKind, byte commodityGood, int shipmentQuantity, int originDepotBuildingId,
-                       long departure, long eta) {
+                       int ownerCityId, long departure, long eta) {
         int id = freeTop > 0 ? freeIds[--freeTop] : allocateFreshId();
         kind[id] = shipmentKind;
         commodity[id] = commodityGood;
         quantity[id] = shipmentQuantity;
         depotBuildingId[id] = originDepotBuildingId;
+        cityId[id] = ownerCityId;
         departureTick[id] = departure;
         etaTick[id] = eta;
         active[id] = true;
@@ -91,6 +94,16 @@ public final class ShipmentRegistry {
 
     public int depotBuildingId(int id) {
         return depotBuildingId[id];
+    }
+
+    /**
+     * The city this shipment was created for — captured at departure, not re-derived from the
+     * depot building afterward. A depot can be demolished (and its id slot reused for a different
+     * building, even a different city) before an in-flight shipment arrives; settlement must still
+     * land in the original city's books, not whatever happens to own that id later.
+     */
+    public int cityId(int id) {
+        return cityId[id];
     }
 
     public long departureTick(int id) {
@@ -132,11 +145,12 @@ public final class ShipmentRegistry {
     }
 
     public void restoreActive(int id, byte shipmentKind, byte commodityGood, int shipmentQuantity,
-                               int originDepotBuildingId, long departure, long eta) {
+                               int originDepotBuildingId, int ownerCityId, long departure, long eta) {
         kind[id] = shipmentKind;
         commodity[id] = commodityGood;
         quantity[id] = shipmentQuantity;
         depotBuildingId[id] = originDepotBuildingId;
+        cityId[id] = ownerCityId;
         departureTick[id] = departure;
         etaTick[id] = eta;
         active[id] = true;
@@ -161,6 +175,7 @@ public final class ShipmentRegistry {
         commodity = Arrays.copyOf(commodity, newCapacity);
         quantity = Arrays.copyOf(quantity, newCapacity);
         depotBuildingId = Arrays.copyOf(depotBuildingId, newCapacity);
+        cityId = Arrays.copyOf(cityId, newCapacity);
         departureTick = Arrays.copyOf(departureTick, newCapacity);
         etaTick = Arrays.copyOf(etaTick, newCapacity);
         active = Arrays.copyOf(active, newCapacity);

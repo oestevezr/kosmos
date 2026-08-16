@@ -26,6 +26,7 @@ public final class BuildingRegistry {
     private byte[] type;
     private int[] tileX;
     private int[] tileY;
+    private int[] cityId;
     private int[] population;
     private int[] jobs;
     private byte[] incomeLevel;
@@ -53,6 +54,7 @@ public final class BuildingRegistry {
         type = new byte[capacity];
         tileX = new int[capacity];
         tileY = new int[capacity];
+        cityId = new int[capacity];
         population = new int[capacity];
         jobs = new int[capacity];
         incomeLevel = new byte[capacity];
@@ -81,18 +83,19 @@ public final class BuildingRegistry {
         return activeCount;
     }
 
-    /** Allocates a new non-production building record and returns its id (always >= 1). */
-    public int create(byte buildingType, int worldTileX, int worldTileY) {
-        return create(buildingType, worldTileX, worldTileY, GoodType.NONE, 0, GoodType.NONE, 0);
+    /** Allocates a new non-production building record, owned by {@code ownerCityId}, and returns its id (always >= 1). */
+    public int create(byte buildingType, int worldTileX, int worldTileY, int ownerCityId) {
+        return create(buildingType, worldTileX, worldTileY, ownerCityId, GoodType.NONE, 0, GoodType.NONE, 0);
     }
 
     /** Allocates a new production building (spec §7, §21): produces {@code outputGood} from {@code inputGood} (or from nothing, for extraction). */
-    public int create(byte buildingType, int worldTileX, int worldTileY,
+    public int create(byte buildingType, int worldTileX, int worldTileY, int ownerCityId,
                        byte outputGoodType, int outputRate, byte inputGoodType, int inputRate) {
         int id = freeTop > 0 ? freeIds[--freeTop] : allocateFreshId();
         type[id] = buildingType;
         tileX[id] = worldTileX;
         tileY[id] = worldTileY;
+        cityId[id] = ownerCityId;
         population[id] = 0;
         jobs[id] = 0;
         incomeLevel[id] = 0;
@@ -121,13 +124,14 @@ public final class BuildingRegistry {
     }
 
     /** Directly installs an active building at {@code id} during restore. See {@link #createForRestore}. */
-    public void restoreActive(int id, byte buildingType, int worldTileX, int worldTileY,
+    public void restoreActive(int id, byte buildingType, int worldTileX, int worldTileY, int ownerCityId,
                                int populationValue, int jobsValue, byte incomeLevelValue,
                                int employmentRatePercentValue, int satisfactionPercentValue,
                                byte outputGoodType, int outputRate, byte inputGoodType, int inputRate) {
         type[id] = buildingType;
         tileX[id] = worldTileX;
         tileY[id] = worldTileY;
+        cityId[id] = ownerCityId;
         population[id] = populationValue;
         jobs[id] = jobsValue;
         incomeLevel[id] = incomeLevelValue;
@@ -160,6 +164,7 @@ public final class BuildingRegistry {
         type = Arrays.copyOf(type, newCapacity);
         tileX = Arrays.copyOf(tileX, newCapacity);
         tileY = Arrays.copyOf(tileY, newCapacity);
+        cityId = Arrays.copyOf(cityId, newCapacity);
         population = Arrays.copyOf(population, newCapacity);
         jobs = Arrays.copyOf(jobs, newCapacity);
         incomeLevel = Arrays.copyOf(incomeLevel, newCapacity);
@@ -204,6 +209,11 @@ public final class BuildingRegistry {
 
     public int tileY(int id) {
         return tileY[id];
+    }
+
+    /** The city this building belongs to (spec §9) — never {@code 0}; every building requires an owning city to be created. */
+    public int cityId(int id) {
+        return cityId[id];
     }
 
     public int population(int id) {

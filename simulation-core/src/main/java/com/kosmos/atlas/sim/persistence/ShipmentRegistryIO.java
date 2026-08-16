@@ -15,13 +15,16 @@ import java.nio.file.Path;
  * while the game was closed) is not an error at load time — it simply completes as normal on its
  * next {@code ShipmentSystem} tick; nothing here needs the depot to still be there, since the
  * money side of the trade was already settled at departure (see {@code ShipmentSystem}'s javadoc).
+ * The owning city id ({@code cityId}), on the other hand, is exactly what settlement needs and
+ * always persists correctly regardless of what happens to the depot building.
  */
 public final class ShipmentRegistryIO {
 
     private static final int MAGIC = 0x41545253; // "ATRS" (Atlas Routes/Shipments)
-    private static final int FORMAT_VERSION = 1;
+    /** Bumped to 2 in the multi-city refactor to add the owning cityId field (spec §32). */
+    private static final int FORMAT_VERSION = 2;
     private static final int MAX_SHIPMENTS = 1 << 20; // ~1M in-flight shipments — generous, still bounded
-    private static final int BYTES_PER_ACTIVE_SHIPMENT = 1 + 1 + 4 + 4 + 8 + 8;
+    private static final int BYTES_PER_ACTIVE_SHIPMENT = 1 + 1 + 4 + 4 + 4 + 8 + 8;
 
     public static void write(Path file, ShipmentRegistry registry) throws IOException {
         AtomicFileWriter.write(file, (OutputStream sink) -> {
@@ -43,6 +46,7 @@ public final class ShipmentRegistryIO {
                 body.writeByte(registry.commodity(id));
                 body.writeInt(registry.quantity(id));
                 body.writeInt(registry.depotBuildingId(id));
+                body.writeInt(registry.cityId(id));
                 body.writeLong(registry.departureTick(id));
                 body.writeLong(registry.etaTick(id));
             }
@@ -78,9 +82,10 @@ public final class ShipmentRegistryIO {
                 byte commodity = bodyIn.readByte();
                 int quantity = bodyIn.readInt();
                 int depotBuildingId = bodyIn.readInt();
+                int cityId = bodyIn.readInt();
                 long departureTick = bodyIn.readLong();
                 long etaTick = bodyIn.readLong();
-                registry.restoreActive(id, kind, commodity, quantity, depotBuildingId, departureTick, etaTick);
+                registry.restoreActive(id, kind, commodity, quantity, depotBuildingId, cityId, departureTick, etaTick);
             }
             return registry;
         }
