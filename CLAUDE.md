@@ -153,6 +153,19 @@ el código fuente.
   el nodo de cualquier Puerto demolido — ahora mapea cualquier tipo de edificio gateway a su
   `NodeType`. Persistencia: `airports.dat`/`stations.dat` (nuevos), sin bump de formatos existentes
   (`BusRouteRegistry` deliberadamente sin persistir).
+- **Renderizar zonas/carreteras/edificios en `game-client`** (fuera de la secuencia MVP del spec,
+  pedido explícito del usuario, ver `docs/roadmap.md`). Primera vez que el cliente dibuja algo más
+  que terreno. `ChunkMesh` pasa de 1 quad/tile fijo a hasta 2 (`MAX_QUADS_PER_CHUNK =
+  TILES_PER_CHUNK * 2`): el de terreno siempre, más uno opcional de superposición (carretera >
+  edificio por categoría > tinte semitransparente de lote zonificado vacío, mutuamente excluyentes).
+  Sigue invalidándose solo con `chunk.version()` — ni `roadType`/`zoneType`/`buildingId` tienen
+  dirty-tracking propio. `PlaceholderAtlasGenerator` gana celdas de zona (alfa ≈0.5 horneado en el
+  Pixmap)/carretera/8 categorías de edificio, mismo mecanismo de color sólido procedural que ya
+  usaba el terreno — sigue sin haber ningún asset de arte real. `WorldRenderer`/`ChunkRenderCache`
+  ganaron un parámetro `BuildingRegistry`. Se corrigió de paso que `AtlasGame` nunca llamaba
+  `glBlendFunc` pese a habilitar `GL_BLEND` (no importaba hasta que el tinte de zona lo necesitó).
+  `AtlasGame.create()` ahora funda una ciudad demo (antes no colocaba nada) para que el cambio sea
+  visible. Verificado con `screencapture -x`.
 
 ## Estructura del proyecto
 
@@ -182,8 +195,11 @@ simulation-core/   Java puro. CERO dependencias de libGDX/LWJGL/Android — regl
                     settlements.dat, cities.dat, routes.dat, loans.dat, ports.dat, ...)
   sim/util/         LongIntHashMap, Histogram — primitivas sin boxing para las rutas calientes
 
-game-client/        libGDX. render/ (IsoProjection, ChunkMesh, WorldRenderer), camera/, ui/,
-                    presentation/ (AtlasGame). Depende de simulation-core, nunca al revés.
+game-client/        libGDX. render/ (IsoProjection, ChunkMesh — hasta 2 quads/tile: terreno +
+                    carretera/edificio/zona —, WorldRenderer, ChunkRenderCache,
+                    PlaceholderAtlasGenerator — sin arte real, color sólido procedural), camera/,
+                    ui/, presentation/ (AtlasGame — funda una ciudad demo en create()). Depende de
+                    simulation-core, nunca al revés.
 platform-desktop/   Entry point LWJGL3. Casi vacío a propósito.
 headless-runner/    CLI que corre WorldManager sin gráficos. `--bench chunkgen|city|smoke`.
 benchmark/          JMH. Un archivo por sistema medido (ChunkGeneration, Noise, LongIntHashMap,

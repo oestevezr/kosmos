@@ -3,6 +3,7 @@ package com.kosmos.atlas.client.render;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
+import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
 import com.kosmos.atlas.sim.world.WorldConstants;
@@ -50,7 +51,7 @@ public final class WorldRenderer implements com.badlogic.gdx.utils.Disposable {
         return lastDrawnTileCount;
     }
 
-    public void render(OrthographicCamera camera, ChunkStore chunkStore) {
+    public void render(OrthographicCamera camera, ChunkStore chunkStore, BuildingRegistry buildings) {
         renderCache.beginFrame();
 
         int[] range = visibleChunkRange(camera);
@@ -77,7 +78,7 @@ public final class WorldRenderer implements com.badlogic.gdx.utils.Disposable {
                 visibleChunks++;
                 stillVisible.add((((long) cx) << 32) | (cy & 0xFFFFFFFFL));
 
-                ChunkMesh mesh = renderCache.getOrBuild(chunk);
+                ChunkMesh mesh = renderCache.getOrBuild(chunk, buildings);
                 if (mesh == null) {
                     continue; // rebuild-budget exhausted this frame; draw it next frame instead
                 }

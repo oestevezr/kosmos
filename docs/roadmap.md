@@ -783,6 +783,67 @@ vez de implementarla literalmente por radio.
 
 ---
 
+## Renderizar zonas, carreteras y edificios en `game-client` — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+Tras ~15 fases de trabajo en `simulation-core`, `game-client` seguía dibujando solo terreno —
+`Chunk.zoneType`/`roadType`/`buildingId` estaban disponibles sin ningún consumidor visual desde
+Fase 2. No hay ningún asset de arte en el repo (`assets/atlas/` vacío); todo el terreno ya era color
+sólido procedural vía `PlaceholderAtlasGenerator`. Esta pasada extiende exactamente ese mismo
+mecanismo (más celdas de color) en vez de introducir un pipeline de arte real.
+
+### Diseño: una sola malla por chunk, hasta 2 quads por tile
+Spec §44.2/44.3 describen capas separadas (terrain/infrastructure/buildings/...) con caché propio
+por capa. Se simplificó deliberadamente a una sola `ChunkMesh` por chunk que puede emitir **hasta 2
+quads por tile**: el quad de terreno (como siempre) + un quad de superposición opcional —
+carretera, o edificio (coloreado por categoría), o lote zonificado vacío (tinte semitransparente) —,
+en ese orden de prioridad, mutuamente excluyentes en la práctica. Evita 4 buffers/draw-calls por
+chunk y sigue funcionando con el único `chunk.version()` que ya existe: ni `roadType` ni `zoneType`
+ni `buildingId` tienen dirty-tracking propio, así que una sola malla invalidada por ese mismo
+`version()` ya cubre los tres. `ChunkMesh.MAX_QUADS_PER_CHUNK = TILES_PER_CHUNK * 2` reemplaza el
+supuesto fijo de 1 quad/tile; `rebuild` ahora cuenta un `quadCount` real (varía por chunk) y
+`render` dibuja solo esos índices.
+
+`PlaceholderAtlasGenerator.Atlas` ganó `byZoneType`/`byRoadType`/`byBuildingCategory` sobre la misma
+`Texture` (nunca dos binds por frame). Las 3 celdas de zona se hornean con **alfa ≈0.5 en el propio
+Pixmap** (no en el vértice) — un lote vacío se lee como un tinte sobre el terreno, no un tile opaco;
+el resto de las celdas quedan opacas. `buildingCategoryIndex(byte buildingType)` agrupa los 36
+`BuildingType` en 8 categorías de color (Residencial/Comercial/Industrial/Utilidad/Cívico/Lujo/
+Transporte/Institucional) para no necesitar 36 colores distintos.
+
+`WorldRenderer.render`/`ChunkRenderCache.getOrBuild`/`ChunkMesh.rebuild` ganaron un parámetro
+`BuildingRegistry` — necesario para saber el `BuildingType` real detrás de `buildingId` (no solo que
+existe algo). Un solo call site en `AtlasGame.render()`: `world.buildings()` ya estaba a un método
+de distancia. La invalidación sigue basada solo en `chunk.version()` — un edificio cambiando de
+`densityLevel`/población no re-dispara un rebuild, correcto para esta pasada porque el color solo
+depende del `BuildingType` (fijo desde que se construye), no del nivel de densidad. Encaje futuro
+para altura/sprite por densidad.
+
+**Bug latente arreglado, no oportunista**: `AtlasGame.render()` ya hacía `glEnable(GL_BLEND)` pero
+nunca llamaba `glBlendFunc` — daba igual porque nada usaba alfa &lt; 1 hasta ahora. El tinte de zona
+semitransparente sí lo necesita, así que se agregó `glBlendFunc(GL_SRC_ALPHA,
+GL_ONE_MINUS_SRC_ALPHA)` junto al `glEnable` que ya estaba.
+
+### Siembra de demo en `AtlasGame.create()`
+El demo no fundaba ninguna ciudad ni colocaba nada — puro sandbox de terreno. Se agregó una siembra
+mínima calcada de `HeadlessMain.runCityGrowthScenario` (mismo `findLandRun` + comandos vía
+`world.submitCommand`): funda una ciudad, una carretera corta, 3 zonas (residencial/comercial/
+industrial) y planta de luz/torre de agua. Verificado visualmente (`screencapture -x`): carretera
+gris visible, tinte dorado semitransparente en el lote industrial aún vacío, edificios asentados en
+verde/azul/caqui según categoría, 60 FPS estables, comandos 15/0 (igual que el escenario headless).
+
+### Fuera de alcance
+- Sprites/arte real — sigue siendo color sólido procedural, ahora con más colores.
+- Altura/extrusión 3D de edificios por `densityLevel`.
+- Capas de `pollutionLevel`/`serviceFlags` — son estado derivado que a propósito no marca el chunk
+  dirty (para no auto-invalidar el caché de render en cada recomputo); necesitan su propio mecanismo
+  de invalidación, no encajan en el `chunk.version()` de esta pasada.
+- Conectividad visual de carreteras (esquinas/cruces) — color plano por tile, sin sprites direccionales.
+- Rutas de autobús / aristas de `RegionalGraph` dibujadas.
+- Overlay de datos (población, densidad, satisfacción) en `DebugOverlay`.
+
+---
+
 ## Preguntas resueltas
 
 1. ~~`TradeDepot` como gateway temprano~~ — resuelto (MVP 0.3): placeable desde 0.3.

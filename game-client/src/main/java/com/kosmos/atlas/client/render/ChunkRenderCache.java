@@ -1,5 +1,6 @@
 package com.kosmos.atlas.client.render;
 
+import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 
 import java.util.HashMap;
@@ -40,7 +41,7 @@ public final class ChunkRenderCache implements com.badlogic.gdx.utils.Disposable
      * {@code null} only if the mesh is stale and this frame's rebuild budget is exhausted — the
      * caller should simply skip drawing that chunk this frame and try again next frame.
      */
-    public ChunkMesh getOrBuild(Chunk chunk) {
+    public ChunkMesh getOrBuild(Chunk chunk, BuildingRegistry buildings) {
         long key = (((long) chunk.chunkX()) << 32) | (chunk.chunkY() & 0xFFFFFFFFL);
         ChunkMesh mesh = cache.get(key);
         if (mesh != null && mesh.builtVersion == chunk.version()) {
@@ -53,7 +54,7 @@ public final class ChunkRenderCache implements com.badlogic.gdx.utils.Disposable
             mesh = new ChunkMesh();
             cache.put(key, mesh);
         }
-        mesh.rebuild(chunk, atlas);
+        mesh.rebuild(chunk, atlas, buildings);
         rebuildsThisFrame++;
         return mesh;
     }

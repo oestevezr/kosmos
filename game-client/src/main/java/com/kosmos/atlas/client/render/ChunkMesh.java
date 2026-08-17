@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.VertexAttribute;
 import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
+import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.WorldConstants;
 
@@ -23,22 +24,39 @@ import com.kosmos.atlas.sim.world.WorldConstants;
  * so rendering can reuse {@link com.badlogic.gdx.graphics.g2d.SpriteBatch#createDefaultShader()}
  * instead of hand-writing a GLSL program — one fewer thing to get wrong by hand (spec §44.2:
  * minimize state changes, not reinvent the pipeline).
+ *
+ * <p>Each tile always contributes a terrain quad, plus at most one overlay quad on top — a road,
+ * or a building (colored by category), or an empty zoned lot's semi-transparent tint, in that
+ * priority order (see {@link #overlayRegionFor}) — never more than one, since in practice a tile is
+ * exactly one of those three (spec's zoning model keeps roads/lots on separate tiles). Quad count
+ * per chunk is therefore variable, between {@code TILES_PER_CHUNK} (all bare terrain) and
+ * {@code TILES_PER_CHUNK * 2} (every tile has an overlay) — {@link #MAX_QUADS_PER_CHUNK} sizes the
+ * scratch buffer/GPU mesh for the worst case, and {@link #quadCount} tracks the real count per
+ * rebuild so {@link #render(ShaderProgram)} only submits the indices actually written.
+ *
+ * <p>Overlay presence follows only {@code Chunk.zoneType}/{@code roadType}/{@code buildingId} —
+ * all three bump {@code Chunk.version()} on every mutating command, the same version this class
+ * already keys rebuilds on, so no extra dirty-tracking is needed. A building's color depends only
+ * on its (immutable-once-built) {@code BuildingType}, never on density/population, so this stays
+ * true even though {@code BuildingRegistry} mutations don't themselves touch {@code Chunk}.
  */
 final class ChunkMesh implements com.badlogic.gdx.utils.Disposable {
 
     private static final int FLOATS_PER_VERTEX = 5; // x, y, packedColor, u, v
     private static final int VERTICES_PER_TILE = 4;
     private static final int INDICES_PER_TILE = 6;
+    private static final int MAX_QUADS_PER_CHUNK = WorldConstants.TILES_PER_CHUNK * 2;
     private static final float WHITE_BITS = Color.WHITE.toFloatBits();
 
     private final Mesh mesh;
-    private final float[] vertexScratch = new float[WorldConstants.TILES_PER_CHUNK * VERTICES_PER_TILE * FLOATS_PER_VERTEX];
+    private final float[] vertexScratch = new float[MAX_QUADS_PER_CHUNK * VERTICES_PER_TILE * FLOATS_PER_VERTEX];
 
     int builtVersion = -1;
+    private int quadCount;
 
     ChunkMesh() {
-        int maxVertices = WorldConstants.TILES_PER_CHUNK * VERTICES_PER_TILE;
-        int maxIndices = WorldConstants.TILES_PER_CHUNK * INDICES_PER_TILE;
+        int maxVertices = MAX_QUADS_PER_CHUNK * VERTICES_PER_TILE;
+        int maxIndices = MAX_QUADS_PER_CHUNK * INDICES_PER_TILE;
         mesh = new Mesh(true, maxVertices, maxIndices,
             new VertexAttribute(VertexAttributes.Usage.Position, 2, ShaderProgram.POSITION_ATTRIBUTE),
             new VertexAttribute(VertexAttributes.Usage.ColorPacked, 4, ShaderProgram.COLOR_ATTRIBUTE),
@@ -57,13 +75,14 @@ final class ChunkMesh implements com.badlogic.gdx.utils.Disposable {
         mesh.setIndices(indices); // fixed forever — only setVertices() changes on rebuild
     }
 
-    void rebuild(Chunk chunk, PlaceholderAtlasGenerator.Atlas atlas) {
+    void rebuild(Chunk chunk, PlaceholderAtlasGenerator.Atlas atlas, BuildingRegistry buildings) {
         int baseX = chunk.chunkX() * WorldConstants.CHUNK_SIZE;
         int baseY = chunk.chunkY() * WorldConstants.CHUNK_SIZE;
         float halfW = IsoProjection.TILE_WIDTH_PX * 0.5f;
         float halfH = IsoProjection.TILE_HEIGHT_PX * 0.5f;
 
         int v = 0;
+        int quads = 0;
         for (int ly = 0; ly < WorldConstants.CHUNK_SIZE; ly++) {
             for (int lx = 0; lx < WorldConstants.CHUNK_SIZE; lx++) {
                 int idx = Chunk.tileIndex(lx, ly);
@@ -77,22 +96,54 @@ final class ChunkMesh implements com.badlogic.gdx.utils.Disposable {
                 float x1 = sx + halfW;
                 float y1 = sy + halfH;
 
-                TextureRegion region = atlas.byTerrainType[chunk.terrainType[idx]];
-                float u = region.getU();
-                float v0 = region.getV();
-                float u2 = region.getU2();
-                float v2 = region.getV2();
+                TextureRegion terrainRegion = atlas.byTerrainType[chunk.terrainType[idx]];
+                v = putQuad(vertexScratch, v, x0, y0, x1, y1, terrainRegion);
+                quads++;
 
-                // Same vertex order/UV assignment as SpriteBatch.draw(region, x, y, w, h):
-                // bottom-left, top-left, top-right, bottom-right.
-                v = putVertex(vertexScratch, v, x0, y0, u, v2);
-                v = putVertex(vertexScratch, v, x0, y1, u, v0);
-                v = putVertex(vertexScratch, v, x1, y1, u2, v0);
-                v = putVertex(vertexScratch, v, x1, y0, u2, v2);
+                TextureRegion overlayRegion = overlayRegionFor(chunk, idx, atlas, buildings);
+                if (overlayRegion != null) {
+                    v = putQuad(vertexScratch, v, x0, y0, x1, y1, overlayRegion);
+                    quads++;
+                }
             }
         }
-        mesh.setVertices(vertexScratch);
+        mesh.setVertices(vertexScratch, 0, v);
+        quadCount = quads;
         builtVersion = chunk.version();
+    }
+
+    /** Road beats building beats empty-zoned-lot — see class javadoc for why only one ever applies
+     *  in practice. Returns {@code null} for a bare tile (no overlay quad emitted). */
+    private static TextureRegion overlayRegionFor(Chunk chunk, int idx, PlaceholderAtlasGenerator.Atlas atlas,
+                                                    BuildingRegistry buildings) {
+        byte road = chunk.roadType[idx];
+        if (road != WorldConstants.ROAD_NONE) {
+            return atlas.byRoadType[road];
+        }
+        int buildingId = chunk.buildingId[idx];
+        if (buildingId != WorldConstants.NO_BUILDING && buildings.isActive(buildingId)) {
+            int category = PlaceholderAtlasGenerator.buildingCategoryIndex(buildings.type(buildingId));
+            return atlas.byBuildingCategory[category];
+        }
+        byte zone = chunk.zoneType[idx];
+        if (zone != WorldConstants.ZONE_NONE) {
+            return atlas.byZoneType[zone];
+        }
+        return null;
+    }
+
+    private static int putQuad(float[] out, int offset, float x0, float y0, float x1, float y1, TextureRegion region) {
+        float u = region.getU();
+        float v0 = region.getV();
+        float u2 = region.getU2();
+        float v2 = region.getV2();
+        // Same vertex order/UV assignment as SpriteBatch.draw(region, x, y, w, h):
+        // bottom-left, top-left, top-right, bottom-right.
+        offset = putVertex(out, offset, x0, y0, u, v2);
+        offset = putVertex(out, offset, x0, y1, u, v0);
+        offset = putVertex(out, offset, x1, y1, u2, v0);
+        offset = putVertex(out, offset, x1, y0, u2, v2);
+        return offset;
     }
 
     private static int putVertex(float[] out, int offset, float x, float y, float u, float v) {
@@ -105,7 +156,7 @@ final class ChunkMesh implements com.badlogic.gdx.utils.Disposable {
     }
 
     void render(ShaderProgram shader) {
-        mesh.render(shader, GL20.GL_TRIANGLES);
+        mesh.render(shader, GL20.GL_TRIANGLES, 0, quadCount * INDICES_PER_TILE);
     }
 
     @Override
