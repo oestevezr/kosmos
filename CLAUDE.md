@@ -183,7 +183,11 @@ docs/                architecture.md (reglas + validación), roadmap.md (plan MV
 `JAVA_HOME` a mano para compilar. Excepción conocida: la JVM que arranca el **daemon** de Gradle
 (no el toolchain de compilación) sigue tomando el `java` por defecto del `PATH`; si es < 17,
 Gradle avisa pero funciona en 8.10. Si algún día se sube a Gradle 9, hará falta un JDK 17+ como
-`java` por defecto en la máquina.
+`java` por defecto en la máquina. También importa para **JMH**: el fork que ejecuta cada benchmark
+usa el `java` del `PATH` directamente (no el toolchain), así que un `PATH` con JDK < 17 falla con
+`UnsupportedClassVersionError` al correr `./gradlew :benchmark:jmh` — pasó en esta máquina hasta
+que se instaló y registró JDK 17 como default (`sudo ln -sfn .../openjdk@17/libexec/openjdk.jdk
+/Library/Java/JavaVirtualMachines/openjdk-17.jdk` + `JAVA_HOME`/`PATH` en `~/.zshrc`).
 
 **Verificación visual del cliente**: lanzar con `./gradlew :platform-desktop:run` en background y
 usar `screencapture -x` — el proceso `java` no siempre expone su ventana vía `System Events`/

@@ -238,6 +238,15 @@ real del cliente desktop y una re-ejecución del escenario `--bench city` del he
    exactamente lo que spec §41 llama "trabajo evitado"); `UtilitySystem` ~2.4 ms/op (confirmado
    como el sistema más caro, como anticipaba la nota de la primera pasada); `PopulationSystem`
    ~43 µs/op; `GovernmentFinance` ~3 µs/op.
+
+   **Actualización tras contaminación + densidad evolutiva** (`docs/roadmap.md`): re-medido en la
+   misma `BenchmarkCityFixture`, con JDK 17 real en el `PATH` (antes el fork de JMH fallaba en esta
+   máquina por un JDK 11 desalineado con el toolchain — ver la nota de toolchain más abajo).
+   `UtilitySystem.update` da **2334.5 µs/op**, sin cambio perceptible pese a la pasada de
+   contaminación nueva (reutiliza el mismo BFS/frontier, no agrega un recorrido extra). `PopulationSystem.tick`
+   sube a **103.5 µs/op** (de ~43 µs/op) — el costo real de `updateDensityLevel` evaluándose por
+   cada edificio activo cada tick; sigue muy por debajo del presupuesto de sub-sistema (spec §41),
+   no ameritó una pasada de optimización.
 3. **`WorldRenderer` ahora usa un `Mesh` estático por chunk** (`ChunkMesh`, nuevo) en vez de 1024
    llamadas a `SpriteBatch.draw` reenviadas cada frame — la caché de render de spec §44.3 tal cual
    está descrita, no solo posiciones de pantalla cacheadas en CPU. El vértice/UV se sube a la GPU

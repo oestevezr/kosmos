@@ -593,12 +593,11 @@ principales, puerto, aeropuerto— y eso ya requiere que esos elementos entren a
 `UtilitySystem` tras cargar un mundo. Sin bump de `ChunkDeltaIO.FORMAT_VERSION`.
 
 ### Nota de medición
-No se pudo correr `UtilitySystemBenchmark` en esta máquina para registrar una cifra nueva — el fork
-JMH usa el `java` del `PATH` (JDK 11 en este entorno), mientras el toolchain de compilación resuelve
-JDK 17 (`UnsupportedClassVersionError`, sin relación con este cambio; ver la nota de toolchain en
-`CLAUDE.md`). `UtilitySystemAllocationTest` sí corrió y sigue en presupuesto (la pasada nueva
-reutiliza `frontier`/`depthOf`, sin asignación adicional). Pendiente: correr el JMH en una máquina
-con JDK 17 en el `PATH` y registrar la cifra real en `docs/architecture.md` §10.
+Resuelto: la máquina solo tenía JDK 11 en el `PATH` (el fork de JMH fallaba con
+`UnsupportedClassVersionError` aunque el toolchain de compilación sí resolvía 17). Se instaló y
+registró JDK 17 como default del sistema. `UtilitySystemBenchmark` corrido: **2334.5 µs/op**, sin
+cambio perceptible frente a la cifra pre-contaminación (~2.4 ms/op) — la pasada nueva reutiliza el
+mismo `frontier`/`depthOf`, no agrega un recorrido. Cifra registrada en `docs/architecture.md` §10.
 
 ---
 
@@ -647,6 +646,12 @@ desde la semilla), listo para que `game-client` elija sprite el día que dibuje 
 ### Persistencia
 `BuildingRegistryIO.FORMAT_VERSION` 3 → 4, `densityLevel` como un byte más por edificio activo.
 Saves viejos no cargan.
+
+### Medición
+`PopulationSystemBenchmark` (JDK 17 ya instalado, ver la nota de la sección anterior): **103.5
+µs/op**, sube desde los ~43 µs/op de antes — el costo de `updateDensityLevel` evaluándose por
+edificio activo cada tick. Sigue muy por debajo del presupuesto de sub-sistema (spec §41); no
+ameritó una pasada de optimización. Cifra registrada en `docs/architecture.md` §10.
 
 ---
 
