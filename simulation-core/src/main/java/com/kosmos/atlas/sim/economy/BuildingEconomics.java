@@ -31,6 +31,13 @@ public final class BuildingEconomics {
     private static final int[] CAPACITY = new int[BuildingType.COUNT];
     private static final int[] COVERAGE_RADIUS_TILES = new int[BuildingType.COUNT];
     private static final long[] UNLOCK_POPULATION = new long[BuildingType.COUNT];
+    /** Signed — positive for polluters, negative for reducers (Park). Zero for every other type,
+     *  including non-polluting building categories and Hydro/Nuclear power (deliberately excluded
+     *  from the polluter roster, see docs/roadmap.md). */
+    private static final int[] POLLUTION_INTENSITY = new int[BuildingType.COUNT];
+    /** Own radius, independent of {@link #COVERAGE_RADIUS_TILES} — e.g. a small Power Plant's
+     *  30-tile electricity reach has nothing to do with its smoke radius. */
+    private static final int[] POLLUTION_RADIUS_TILES = new int[BuildingType.COUNT];
 
     static {
         // --- Electricity: small plant (tier 1, always available) -> hydroelectric -> nuclear ---
@@ -88,6 +95,18 @@ public final class BuildingEconomics {
         setCostOnly(BuildingType.PORT, 8000);
 
         // RESIDENTIAL/COMMERCIAL/INDUSTRIAL: left at zero — their cost lives in ZoneCommand.
+
+        // --- Pollution/noise mechanic: only these polluters and only Park as a reducer (locked
+        // in with the user — narrower buildings-only scope, no natural-forest reduction). Small
+        // Power Plant pollutes; Hydro/Nuclear deliberately don't. See UtilitySystem/PopulationSystem
+        // for how this accumulates and lowers the satisfaction ceiling. ---
+        setPollution(BuildingType.INDUSTRIAL, 25, 8);
+        setPollution(BuildingType.STEEL_MILL, 40, 12);
+        setPollution(BuildingType.MINE, 30, 10);
+        setPollution(BuildingType.QUARRY, 20, 8);
+        setPollution(BuildingType.POWER_PLANT, 35, 10);
+        setPollution(BuildingType.INCINERATOR, 30, 10);
+        setPollution(BuildingType.PARK, -30, 12);
     }
 
     public static double constructionCost(byte buildingType) {
@@ -114,6 +133,14 @@ public final class BuildingEconomics {
         return UNLOCK_POPULATION[buildingType];
     }
 
+    public static int pollutionIntensity(byte buildingType) {
+        return POLLUTION_INTENSITY[buildingType];
+    }
+
+    public static int pollutionRadiusTiles(byte buildingType) {
+        return POLLUTION_RADIUS_TILES[buildingType];
+    }
+
     private static void set(byte type, double constructionCost, double maintenancePerAccrual,
                              int capacity, int coverageRadiusTiles, long unlockPopulation) {
         CONSTRUCTION_COST[type] = constructionCost;
@@ -134,6 +161,12 @@ public final class BuildingEconomics {
 
     private static void setCostOnly(byte type, double constructionCost) {
         CONSTRUCTION_COST[type] = constructionCost;
+    }
+
+    /** Pollution/noise source or reducer — additive to whatever other row this type already has. */
+    private static void setPollution(byte type, int pollutionIntensity, int pollutionRadiusTiles) {
+        POLLUTION_INTENSITY[type] = pollutionIntensity;
+        POLLUTION_RADIUS_TILES[type] = pollutionRadiusTiles;
     }
 
     private BuildingEconomics() {

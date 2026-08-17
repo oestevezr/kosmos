@@ -57,6 +57,13 @@ public final class PopulationSystem {
     private static final int SATISFACTION_CEILING_PROSPERITY = 85;
     private static final int SATISFACTION_CEILING_LUXURY = 100;
 
+    // Pollution/noise mechanic: accumulated intensity (UtilitySystem.pollutionLevel, 0-100 once
+    // clamped here) subtracts 1:1 from whatever ceiling coverage already granted. Floored, not
+    // zeroed, so a polluted zone stagnates instead of hard-bricking. Industrial buildings are
+    // immune to their own pollution — without that, every industrial zone would throttle itself to
+    // the floor the moment it appeared, which would break industrial growth entirely.
+    private static final int SATISFACTION_CEILING_FLOOR = 10;
+
     // Per-city totals, indexed by cityId — grown lazily to match CityRegistry.highWaterMark().
     // A handful of cities (spec §42.3's CITY aggregation tier), so plain arrays sized to city
     // count are trivial; this is not the per-building/per-tile hot path §42.4 warns about.
@@ -134,6 +141,10 @@ public final class PopulationSystem {
             // than a flat +/- step — this is the same code whether the ceiling just rose (built a
             // hospital) or fell (demolished a park), no special case needed either way.
             int ceiling = satisfactionCeiling(flags);
+            if (type != BuildingType.INDUSTRIAL) {
+                int pollution = clamp(pollutionAt(store, buildings.tileX(id), buildings.tileY(id)), 0, 100);
+                ceiling = Math.max(SATISFACTION_CEILING_FLOOR, ceiling - pollution);
+            }
             int currentSatisfaction = buildings.satisfactionPercent(id);
             if (currentSatisfaction < ceiling) {
                 buildings.setSatisfactionPercent(id, Math.min(ceiling, currentSatisfaction + SATISFACTION_RECOVERY_STEP));
@@ -237,6 +248,12 @@ public final class PopulationSystem {
         };
     }
 
+    private static int clamp(int v, int min, int max) {
+        if (v < min) return min;
+        if (v > max) return max;
+        return v;
+    }
+
     private static double clamp01(double v) {
         if (v < 0.0) return 0.0;
         if (v > 1.0) return 1.0;
@@ -251,5 +268,16 @@ public final class PopulationSystem {
         }
         int idx = WorldTileAccess.localIndexAt(worldTileX, worldTileY);
         return chunk.serviceFlags[idx];
+    }
+
+    /** Returns 0 (no pollution) if the building's chunk streamed out — same convention as
+     *  {@link #serviceFlagsAt}. */
+    private static int pollutionAt(ChunkStore store, int worldTileX, int worldTileY) {
+        Chunk chunk = WorldTileAccess.chunkAt(store, worldTileX, worldTileY);
+        if (chunk == null) {
+            return 0;
+        }
+        int idx = WorldTileAccess.localIndexAt(worldTileX, worldTileY);
+        return chunk.pollutionLevel[idx];
     }
 }

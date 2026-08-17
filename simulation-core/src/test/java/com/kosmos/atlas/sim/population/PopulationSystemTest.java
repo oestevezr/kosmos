@@ -249,4 +249,67 @@ class PopulationSystemTest {
         }
         return system.totalResidentialPopulation(1);
     }
+
+    @Test
+    void nearbyPollutionLowersTheResidentialSatisfactionCeilingComparedToNoPollution() {
+        long satisfactionWithSteelMill = residentialSatisfactionAfterTicksWithOrWithoutSteelMill(true, 15);
+        long satisfactionWithoutSteelMill = residentialSatisfactionAfterTicksWithOrWithoutSteelMill(false, 15);
+
+        assertTrue(satisfactionWithSteelMill < satisfactionWithoutSteelMill,
+            "a nearby Steel Mill should lower the ceiling the residence converges to");
+    }
+
+    @Test
+    void industrialBuildingsAreImmuneToTheirOwnPollution() {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_INDUSTRIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        int workplaceId = -1;
+        for (int i = 0; i < 15; i++) {
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
+            workplaceId = chunk.buildingId[Chunk.tileIndex(11, 5)];
+        }
+
+        assertEquals(BuildingType.INDUSTRIAL, buildings.type(workplaceId));
+        assertEquals(60, buildings.satisfactionPercent(workplaceId),
+            "an industrial building must reach the base ceiling despite polluting its own tile");
+    }
+
+    private long residentialSatisfactionAfterTicksWithOrWithoutSteelMill(boolean withSteelMill, int ticks) {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+        if (withSteelMill) {
+            int millId = buildings.create(BuildingType.STEEL_MILL, 12, 5, 1);
+            chunk.buildingId[Chunk.tileIndex(12, 5)] = millId;
+        }
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        int homeId = -1;
+        for (int i = 0; i < ticks; i++) {
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
+            homeId = chunk.buildingId[Chunk.tileIndex(11, 5)];
+        }
+        return buildings.satisfactionPercent(homeId);
+    }
 }

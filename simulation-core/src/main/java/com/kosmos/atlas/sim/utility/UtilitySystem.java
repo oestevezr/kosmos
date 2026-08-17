@@ -73,6 +73,16 @@ public final class UtilitySystem {
     private static final byte[] RELIGION_SOURCE_TYPES = {BuildingType.CHURCH};
     // Central Bank and City Hall are deliberately absent — not coverage sources, see BuildingType.
 
+    /** Every BuildingType.BuildingEconomics row with a nonzero pollution intensity — polluters
+     *  (positive) and reducers (Park, negative). Radius/intensity come from BuildingEconomics, not
+     *  a parallel table here, so tuning the numbers never touches this class. */
+    private static final byte[] POLLUTION_SOURCE_TYPES = {
+        BuildingType.INDUSTRIAL, BuildingType.STEEL_MILL, BuildingType.MINE, BuildingType.QUARRY,
+        BuildingType.POWER_PLANT, BuildingType.INCINERATOR, BuildingType.PARK,
+    };
+    private static final int POLLUTION_CLAMP_MIN = -30000;
+    private static final int POLLUTION_CLAMP_MAX = 30000;
+
     private static final byte[][] COVERAGE_ONLY_SOURCE_TYPES = {
         HEALTHCARE_SOURCE_TYPES, FIRE_SOURCE_TYPES, SANITATION_SOURCE_TYPES,
         CEMETERY_SOURCE_TYPES, PARK_SOURCE_TYPES, MUSEUM_SOURCE_TYPES,
@@ -98,16 +108,23 @@ public final class UtilitySystem {
             coverageOnlyBits |= bit;
         }
         clearBits(store, WorldConstants.SERVICE_POWERED | WorldConstants.SERVICE_WATERED | coverageOnlyBits);
+        clearPollution(store);
         for (byte type : POWER_SOURCE_TYPES) {
-            floodFillFromSources(store, buildings, type, WorldConstants.SERVICE_POWERED, BuildingEconomics.coverageRadiusTiles(type));
+            floodFillFromSources(store, buildings, type, WorldConstants.SERVICE_POWERED, BuildingEconomics.coverageRadiusTiles(type), 0);
         }
         for (byte type : WATER_SOURCE_TYPES) {
-            floodFillFromSources(store, buildings, type, WorldConstants.SERVICE_WATERED, BuildingEconomics.coverageRadiusTiles(type));
+            floodFillFromSources(store, buildings, type, WorldConstants.SERVICE_WATERED, BuildingEconomics.coverageRadiusTiles(type), 0);
         }
         for (int category = 0; category < COVERAGE_ONLY_SOURCE_TYPES.length; category++) {
             int serviceBit = COVERAGE_ONLY_SERVICE_BITS[category];
             for (byte type : COVERAGE_ONLY_SOURCE_TYPES[category]) {
-                floodFillFromSources(store, buildings, type, serviceBit, BuildingEconomics.coverageRadiusTiles(type));
+                floodFillFromSources(store, buildings, type, serviceBit, BuildingEconomics.coverageRadiusTiles(type), 0);
+            }
+        }
+        for (byte type : POLLUTION_SOURCE_TYPES) {
+            int intensity = BuildingEconomics.pollutionIntensity(type);
+            if (intensity != 0) {
+                floodFillFromSources(store, buildings, type, 0, BuildingEconomics.pollutionRadiusTiles(type), intensity);
             }
         }
 
@@ -188,7 +205,18 @@ public final class UtilitySystem {
         });
     }
 
-    private void floodFillFromSources(ChunkStore store, BuildingRegistry buildings, byte sourceType, int serviceBit, int radiusTiles) {
+    private void clearPollution(ChunkStore store) {
+        store.forEach(chunk -> Arrays.fill(chunk.pollutionLevel, (short) 0));
+    }
+
+    /**
+     * @param serviceBit OR-ed into {@code serviceFlags} at every reached tile, or {@code 0} to
+     *                   skip (pure pollution sources aren't coverage sources).
+     * @param pollutionDelta added (saturating) to {@code pollutionLevel} at every reached tile, or
+     *                       {@code 0} to skip (every coverage-only category). Negative for Park.
+     */
+    private void floodFillFromSources(ChunkStore store, BuildingRegistry buildings, byte sourceType,
+                                       int serviceBit, int radiusTiles, int pollutionDelta) {
         frontier.clear();
         depthOf.clear();
 
@@ -218,7 +246,13 @@ public final class UtilitySystem {
             if (!isLand(chunk.terrainType[idx])) {
                 continue; // utilities don't spread across open water in Fase 2
             }
-            chunk.serviceFlags[idx] = chunk.serviceFlags[idx] | serviceBit;
+            if (serviceBit != 0) {
+                chunk.serviceFlags[idx] = chunk.serviceFlags[idx] | serviceBit;
+            }
+            if (pollutionDelta != 0) {
+                int saturated = clampPollution(chunk.pollutionLevel[idx] + pollutionDelta);
+                chunk.pollutionLevel[idx] = (short) saturated;
+            }
 
             if (depth >= radiusTiles) {
                 continue;
@@ -233,6 +267,12 @@ public final class UtilitySystem {
                 }
             }
         }
+    }
+
+    private static int clampPollution(int value) {
+        if (value < POLLUTION_CLAMP_MIN) return POLLUTION_CLAMP_MIN;
+        if (value > POLLUTION_CLAMP_MAX) return POLLUTION_CLAMP_MAX;
+        return value;
     }
 
     private static boolean isLand(byte terrainType) {

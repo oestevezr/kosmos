@@ -98,6 +98,35 @@ class BuildingEconomicsTest {
     }
 
     @Test
+    void pollutersHavePositiveIntensityAndParkIsTheOnlyReducer() {
+        assertTrue(BuildingEconomics.pollutionIntensity(BuildingType.INDUSTRIAL) > 0);
+        assertTrue(BuildingEconomics.pollutionIntensity(BuildingType.STEEL_MILL) > 0);
+        assertTrue(BuildingEconomics.pollutionIntensity(BuildingType.MINE) > 0);
+        assertTrue(BuildingEconomics.pollutionIntensity(BuildingType.QUARRY) > 0);
+        assertTrue(BuildingEconomics.pollutionIntensity(BuildingType.POWER_PLANT) > 0);
+        assertTrue(BuildingEconomics.pollutionIntensity(BuildingType.INCINERATOR) > 0);
+
+        assertTrue(BuildingEconomics.pollutionIntensity(BuildingType.PARK) < 0, "Park is the only reducer");
+
+        assertEquals(0, BuildingEconomics.pollutionIntensity(BuildingType.POWER_PLANT_HYDRO), "only the tier-1 plant pollutes");
+        assertEquals(0, BuildingEconomics.pollutionIntensity(BuildingType.POWER_PLANT_NUCLEAR), "only the tier-1 plant pollutes");
+        assertEquals(0, BuildingEconomics.pollutionIntensity(BuildingType.RESIDENTIAL));
+        assertEquals(0, BuildingEconomics.pollutionIntensity(BuildingType.HOSPITAL));
+    }
+
+    @Test
+    void everyPollutionSourceHasAPositiveRadius() {
+        byte[] pollutionSources = {
+            BuildingType.INDUSTRIAL, BuildingType.STEEL_MILL, BuildingType.MINE, BuildingType.QUARRY,
+            BuildingType.POWER_PLANT, BuildingType.INCINERATOR, BuildingType.PARK,
+        };
+        for (byte type : pollutionSources) {
+            assertTrue(BuildingEconomics.pollutionRadiusTiles(type) > 0,
+                "type " + type + " has nonzero pollution intensity so it needs a radius to spread within");
+        }
+    }
+
+    @Test
     void centralBankHasNoCoverageButGatesLendingAndCostsMore() {
         assertEquals(0, BuildingEconomics.capacity(BuildingType.CENTRAL_BANK));
         assertEquals(0, BuildingEconomics.coverageRadiusTiles(BuildingType.CENTRAL_BANK), "not a UtilitySystem coverage source");

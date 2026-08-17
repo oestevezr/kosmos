@@ -544,6 +544,64 @@ servicios cívicos.
 
 ---
 
+## Contaminación (mecánica de intensidad acumulativa) — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+El usuario pidió que ciertos edificios contaminen y otros (parques) reduzcan la contaminación, como
+contrapeso al sistema de cobertura por radio de los servicios cívicos (ya implementado, sin cambios
+en esta fase). A diferencia de la cobertura —binaria, dentro/fuera de radio— la contaminación se
+acumula: tres decisiones se cerraron con el usuario antes de diseñar: (1) modelo acumulativo por
+intensidad, sin decaimiento por distancia, fuentes solapadas suman; (2) el efecto es bajar el techo
+de satisfacción de `PopulationSystem`, no un multiplicador de crecimiento aparte; (3) alcance
+acotado: contaminan `INDUSTRIAL`/`STEEL_MILL`/`MINE`/`QUARRY`/`POWER_PLANT` (solo tier 1, no
+Hidro/Nuclear)/`INCINERATOR`; solo `PARK` reduce (bosques naturales descartados a propósito).
+
+### Diseño: reutiliza el flood-fill de `UtilitySystem`, no un sistema nuevo
+`UtilitySystem.floodFillFromSources` (el mismo BFS multi-fuente acotado por radio que ya alimenta
+cobertura de electricidad/agua/servicios cívicos) ganó un parámetro `pollutionDelta`: en vez de
+solo OR-ear un bit de `serviceFlags`, ahora también puede sumar (saturando) a
+`Chunk.pollutionLevel` (`short[]` nuevo, capa derivada como `serviceFlags`, nunca persistida ni
+marca el chunk dirty). `BuildingEconomics` ganó dos columnas —`pollutionIntensity`/
+`pollutionRadiusTiles`, con su propio radio, independiente de `coverageRadiusTiles`— y una fila por
+tipo polutor/reductor. `PARK` hace dos flood-fills separados: el de cobertura existente (bit
+`SERVICE_PARK`) y uno nuevo de contaminación (delta negativo), porque su radio de cobertura (15) y
+su radio de reducción de contaminación (12) no tienen por qué coincidir.
+
+`PopulationSystem.growExistingBuildings` resta la contaminación del tile (recortada a `[0,100]`) del
+techo de satisfacción ya calculado, con un piso de 10 (nunca cero duro). **Los edificios
+industriales son inmunes a su propia contaminación** — sin esta excepción, toda zona industrial se
+autoestrangularía al techo mínimo apenas apareciera, y el escenario `--bench city` (que zonifica
+industria junto a residencial/comercial) dejaría de crecer.
+
+### Decisión de diseño no confirmada explícitamente con el usuario: un solo eje, no dos
+El pedido original mencionaba contaminación **y** ruido por separado. Se implementó un único eje
+("contaminación") en vez de dos arrays paralelos: con el alcance de fuentes elegido, el ruido
+tendría exactamente las mismas fuentes que la contaminación (industria/incineradora/planta), así
+que un segundo eje duplicaría BFS y memoria sin cambiar ninguna decisión del jugador. Un eje de
+ruido propio se justifica el día que exista una fuente ruidosa pero no contaminante —carreteras
+principales, puerto, aeropuerto— y eso ya requiere que esos elementos entren al modelo de cobertura
+(MVP 0.5+ en adelante). **Deuda documentada, no implementada.**
+
+### Fuera de alcance
+- Eje de ruido separado (ver arriba).
+- Bosques/`RESOURCE_TIMBER` naturales como reductor pasivo — descartado explícitamente por el usuario.
+- Efecto de la contaminación en tesoro, salud o mortalidad — solo el techo de satisfacción.
+- Contaminación bloqueando el asentamiento de un tile zonificado — `settleEmptyZonedTiles` no cambia.
+
+### Persistencia
+`Chunk.pollutionLevel` **no se persiste** — es 100% derivado, se recomputa en la primera pasada de
+`UtilitySystem` tras cargar un mundo. Sin bump de `ChunkDeltaIO.FORMAT_VERSION`.
+
+### Nota de medición
+No se pudo correr `UtilitySystemBenchmark` en esta máquina para registrar una cifra nueva — el fork
+JMH usa el `java` del `PATH` (JDK 11 en este entorno), mientras el toolchain de compilación resuelve
+JDK 17 (`UnsupportedClassVersionError`, sin relación con este cambio; ver la nota de toolchain en
+`CLAUDE.md`). `UtilitySystemAllocationTest` sí corrió y sigue en presupuesto (la pasada nueva
+reutiliza `frontier`/`depthOf`, sin asignación adicional). Pendiente: correr el JMH en una máquina
+con JDK 17 en el `PATH` y registrar la cifra real en `docs/architecture.md` §10.
+
+---
+
 ## MVP 0.6 — Regional Passenger Transport
 
 ### Qué pide el spec

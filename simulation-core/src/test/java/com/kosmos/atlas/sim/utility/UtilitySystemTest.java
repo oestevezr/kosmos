@@ -1,6 +1,7 @@
 package com.kosmos.atlas.sim.utility;
 
 import com.kosmos.atlas.sim.city.CityRegistry;
+import com.kosmos.atlas.sim.economy.BuildingEconomics;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.world.Chunk;
@@ -215,5 +216,112 @@ class UtilitySystemTest {
 
         assertEquals(0, chunk.serviceFlags[Chunk.tileIndex(5, 5)], "Central Bank sets no service bit");
         assertEquals(0, chunk.serviceFlags[Chunk.tileIndex(6, 5)], "City Hall sets no service bit");
+    }
+
+    @Test
+    void steelMillPollutesWithinItsRadiusAndNotBeyondIt() {
+        ChunkStore store = new ChunkStore(9);
+        for (int cx = -2; cx <= 2; cx++) {
+            Chunk chunk = new Chunk();
+            chunk.reset(cx, 0);
+            java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+            store.put(chunk);
+        }
+        BuildingRegistry buildings = new BuildingRegistry();
+        int millId = buildings.create(BuildingType.STEEL_MILL, 0, 0, 1);
+        store.get(0, 0).buildingId[Chunk.tileIndex(0, 0)] = millId;
+
+        new UtilitySystem().update(store, buildings, new CityRegistry());
+
+        Chunk sourceChunk = store.get(0, 0);
+        assertTrue(sourceChunk.pollutionLevel[Chunk.tileIndex(0, 0)] > 0, "the source tile itself is polluted");
+
+        // 90 tiles east exceeds a Steel Mill's 12-tile pollution radius.
+        Chunk farChunk = store.get(2, 0);
+        assertEquals(0, farChunk.pollutionLevel[Chunk.tileIndex(26, 0)], "pollution must not extend past its radius");
+    }
+
+    @Test
+    void overlappingPollutionSourcesAccumulateAdditively() {
+        ChunkStore store = new ChunkStore(4);
+        Chunk chunk = new Chunk();
+        chunk.reset(0, 0);
+        java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+        store.put(chunk);
+
+        BuildingRegistry buildings = new BuildingRegistry();
+        int mineId = buildings.create(BuildingType.MINE, 5, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = mineId;
+        int quarryId = buildings.create(BuildingType.QUARRY, 6, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(6, 5)] = quarryId;
+
+        new UtilitySystem().update(store, buildings, new CityRegistry());
+
+        int midpoint = chunk.pollutionLevel[Chunk.tileIndex(6, 5)];
+        assertTrue(midpoint >= BuildingEconomics.pollutionIntensity(BuildingType.MINE) + BuildingEconomics.pollutionIntensity(BuildingType.QUARRY),
+            "a tile in range of both sources should sum both intensities");
+    }
+
+    @Test
+    void parkReducesPollutionFromANearbyPolluter() {
+        ChunkStore store = new ChunkStore(4);
+        Chunk chunk = new Chunk();
+        chunk.reset(0, 0);
+        java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+        store.put(chunk);
+
+        BuildingRegistry buildings = new BuildingRegistry();
+        int industrialId = buildings.create(BuildingType.INDUSTRIAL, 5, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = industrialId;
+
+        UtilitySystem system = new UtilitySystem();
+        system.update(store, buildings, new CityRegistry());
+        int withoutPark = chunk.pollutionLevel[Chunk.tileIndex(5, 5)];
+
+        int parkId = buildings.create(BuildingType.PARK, 6, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(6, 5)] = parkId;
+        system.update(store, buildings, new CityRegistry());
+        int withPark = chunk.pollutionLevel[Chunk.tileIndex(5, 5)];
+
+        assertTrue(withPark < withoutPark, "a nearby park should lower pollution compared to no park at all");
+    }
+
+    @Test
+    void hydroAndNuclearPowerPlantsDoNotPollute() {
+        ChunkStore store = new ChunkStore(4);
+        Chunk chunk = new Chunk();
+        chunk.reset(0, 0);
+        java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+        store.put(chunk);
+
+        BuildingRegistry buildings = new BuildingRegistry();
+        int hydroId = buildings.create(BuildingType.POWER_PLANT_HYDRO, 5, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = hydroId;
+
+        new UtilitySystem().update(store, buildings, new CityRegistry());
+
+        assertEquals(0, chunk.pollutionLevel[Chunk.tileIndex(5, 5)], "only the small tier-1 plant pollutes, not Hydro/Nuclear");
+    }
+
+    @Test
+    void demolishingAPollutingSourceClearsItsPollutionOnNextUpdate() {
+        ChunkStore store = new ChunkStore(4);
+        Chunk chunk = new Chunk();
+        chunk.reset(0, 0);
+        java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+        store.put(chunk);
+
+        BuildingRegistry buildings = new BuildingRegistry();
+        int incineratorId = buildings.create(BuildingType.INCINERATOR, 5, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = incineratorId;
+
+        UtilitySystem system = new UtilitySystem();
+        system.update(store, buildings, new CityRegistry());
+        assertTrue(chunk.pollutionLevel[Chunk.tileIndex(5, 5)] > 0);
+
+        buildings.demolish(incineratorId);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = WorldConstants.NO_BUILDING;
+        system.update(store, buildings, new CityRegistry());
+        assertEquals(0, chunk.pollutionLevel[Chunk.tileIndex(5, 5)]);
     }
 }

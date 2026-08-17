@@ -110,6 +110,15 @@ el código fuente.
   3 bits nuevos ya caben en el `int` de `Chunk.serviceFlags`. **Pendiente sin implementar**:
   densidad evolutiva estilo TheOtown (casas chicas → rascacielos) — arquitectura distinta, requiere
   su propio plan.
+- **Contaminación (intensidad acumulativa)**: completa (ver `docs/roadmap.md`). Reutiliza el
+  flood-fill BFS de `UtilitySystem` (nuevo parámetro `pollutionDelta` en `floodFillFromSources`,
+  suma saturante en vez de OR de bit) en lugar de un sistema nuevo. `Chunk.pollutionLevel`
+  (`short[]`, derivado, no persistido — sin bump de `ChunkDeltaIO.FORMAT_VERSION`).
+  `BuildingEconomics` gana `pollutionIntensity`/`pollutionRadiusTiles` (radio propio, distinto de
+  `coverageRadiusTiles`). Contaminan `INDUSTRIAL`/`STEEL_MILL`/`MINE`/`QUARRY`/`POWER_PLANT` (solo
+  tier 1)/`INCINERATOR`; solo `PARK` reduce. `PopulationSystem` resta la contaminación del techo de
+  satisfacción (piso 10); los edificios industriales son inmunes a su propia contaminación. Un solo
+  eje cubre pollution+noise por ahora — eje de ruido separado queda como deuda documentada.
 - **MVP 0.6 (Regional Passenger Transport) en adelante**: solo planificado (`docs/roadmap.md`),
   sin código.
 

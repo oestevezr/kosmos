@@ -29,6 +29,10 @@ public final class Chunk {
     public final int[] buildingId = new int[WorldConstants.TILES_PER_CHUNK];
     /** {@code int}, not {@code byte} — Fase 2's civic-service tiers pushed past 8 usable bits. */
     public final int[] serviceFlags = new int[WorldConstants.TILES_PER_CHUNK];
+    /** Derived: fully recomputed by UtilitySystem every cadence from active pollution sources
+     *  minus reducers (spec-adjacent — pollution/noise mechanic). Never persisted, never marks the
+     *  chunk dirty, unlike {@link #serviceFlags} — see UtilitySystem's class javadoc. */
+    public final short[] pollutionLevel = new short[WorldConstants.TILES_PER_CHUNK];
 
     private int chunkX;
     private int chunkY;
@@ -57,6 +61,7 @@ public final class Chunk {
         Arrays.fill(roadType, WorldConstants.ROAD_NONE);
         Arrays.fill(buildingId, WorldConstants.NO_BUILDING);
         Arrays.fill(serviceFlags, 0);
+        Arrays.fill(pollutionLevel, (short) 0);
     }
 
     public int chunkX() {
