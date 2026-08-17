@@ -198,6 +198,12 @@ reutilizando `GoodsLedgerIO.writeInto/readInto` (extraídos del antiguo formato 
 para poder embeberse por ciudad sin duplicar la lógica de codificación).
 
 ### Sistema de préstamos
+**Nota de consistencia con el spec**: esto contradice directamente spec §34 ("What NOT to
+Simulate Initially" lista explícitamente "avoid: realistic financial banking"). Es una desviación
+deliberada, pedida explícitamente por el usuario — no un descuido ni una lectura errónea del spec.
+El spec en sí queda sin tocar (es el documento de visión original, no se edita); esta nota existe
+para que quien lea §34 después no asuma que el banking sigue fuera de alcance.
+
 `LoanRegistry` (SoA, mismo patrón de tombstone free-list): cada préstamo activo registra tipo de
 prestamista (`LoanLenderType.EXTERNAL_MARKET` o `CITY`), ciudad deudora, ciudad prestamista (0 si es
 el mercado externo), principal, saldo pendiente, tasa de interés por acumulación, y tick de origen.
