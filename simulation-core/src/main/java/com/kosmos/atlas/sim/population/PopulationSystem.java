@@ -152,6 +152,8 @@ public final class PopulationSystem {
                 buildings.setSatisfactionPercent(id, Math.max(ceiling, currentSatisfaction - SATISFACTION_DECAY_STEP));
             }
 
+            updateDensityLevel(buildings, id, type);
+
             int cityId = buildings.cityId(id);
             // Being in flood-fill range isn't enough — the city's installed capacity must also
             // cover its demand (spec's tiered-service capacity model, see UtilitySystem's javadoc),
@@ -179,8 +181,9 @@ public final class PopulationSystem {
     }
 
     private void growResidential(BuildingRegistry buildings, int id, int cityId, double growthRateMultiplier) {
+        int capacity = BuildingDensity.residentialCapacity(buildings.densityLevel(id));
         int current = buildings.population(id);
-        if (current >= RESIDENTIAL_CAPACITY) {
+        if (current >= capacity) {
             return;
         }
         long totalJobs = totalCommercialJobs(cityId) + totalIndustrialJobs(cityId);
@@ -189,12 +192,13 @@ public final class PopulationSystem {
         if (growth <= 0) {
             return;
         }
-        buildings.setPopulation(id, Math.min(RESIDENTIAL_CAPACITY, current + growth));
+        buildings.setPopulation(id, Math.min(capacity, current + growth));
     }
 
     private void growWorkplace(BuildingRegistry buildings, int id, int cityId, double growthRateMultiplier) {
+        int capacity = BuildingDensity.jobCapacity(buildings.densityLevel(id));
         int current = buildings.jobs(id);
-        if (current >= JOB_CAPACITY) {
+        if (current >= capacity) {
             return;
         }
         long totalJobs = totalCommercialJobs(cityId) + totalIndustrialJobs(cityId);
@@ -203,7 +207,38 @@ public final class PopulationSystem {
         if (growth <= 0) {
             return;
         }
-        buildings.setJobs(id, Math.min(JOB_CAPACITY, current + growth));
+        buildings.setJobs(id, Math.min(capacity, current + growth));
+    }
+
+    /**
+     * Promotes a full, well-serviced building one density level, or demotes an under-serviced one
+     * — see {@link BuildingDensity}'s javadoc for the hysteresis rationale. At most one level per
+     * tick either way; clamps population/jobs down to the new (smaller) capacity on demotion so a
+     * shrunk building never reports more occupants than it can hold.
+     */
+    private void updateDensityLevel(BuildingRegistry buildings, int id, byte type) {
+        int level = buildings.densityLevel(id);
+        int satisfaction = buildings.satisfactionPercent(id);
+        boolean isResidential = type == BuildingType.RESIDENTIAL;
+        int occupancy = isResidential ? buildings.population(id) : buildings.jobs(id);
+        int capacityAtCurrentLevel = isResidential
+            ? BuildingDensity.residentialCapacity(level) : BuildingDensity.jobCapacity(level);
+
+        if (level < BuildingDensity.MAX_LEVEL
+            && occupancy >= capacityAtCurrentLevel
+            && satisfaction >= BuildingDensity.promoteSatisfaction(level + 1)) {
+            buildings.setDensityLevel(id, level + 1);
+        } else if (level > 0 && satisfaction < BuildingDensity.demoteSatisfaction(level)) {
+            int newLevel = level - 1;
+            buildings.setDensityLevel(id, newLevel);
+            int newCapacity = isResidential
+                ? BuildingDensity.residentialCapacity(newLevel) : BuildingDensity.jobCapacity(newLevel);
+            if (isResidential) {
+                buildings.setPopulation(id, Math.min(occupancy, newCapacity));
+            } else {
+                buildings.setJobs(id, Math.min(occupancy, newCapacity));
+            }
+        }
     }
 
     private void settleEmptyZonedTiles(ChunkStore store, BuildingRegistry buildings, CityRegistry cities) {

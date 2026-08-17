@@ -312,4 +312,107 @@ class PopulationSystemTest {
         }
         return buildings.satisfactionPercent(homeId);
     }
+
+    @Test
+    void residentialWithLuxuryCoverageReachesMaxDensityAndSurpassesTheOldFlatCapacity() {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+        chunk.zoneType[Chunk.tileIndex(9, 5)] = WorldConstants.ZONE_COMMERCIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+        int parkId = buildings.create(BuildingType.PARK, 10, 22, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 22)] = parkId;
+        int museumId = buildings.create(BuildingType.MUSEUM, 10, 23, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 23)] = museumId;
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        int homeId = -1;
+        for (int i = 0; i < 80; i++) {
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
+            homeId = chunk.buildingId[Chunk.tileIndex(11, 5)];
+        }
+
+        assertEquals(BuildingDensity.MAX_LEVEL, buildings.densityLevel(homeId),
+            "sustained luxury-tier satisfaction should evolve the building to its top density level");
+        assertTrue(buildings.population(homeId) > 60, "a promoted building must hold more residents than the old flat cap");
+    }
+
+    @Test
+    void residentialWithoutProsperityCoverageNeverLeavesDensityLevelZero() {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+        chunk.zoneType[Chunk.tileIndex(9, 5)] = WorldConstants.ZONE_COMMERCIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        int homeId = -1;
+        for (int i = 0; i < 80; i++) {
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
+            homeId = chunk.buildingId[Chunk.tileIndex(11, 5)];
+        }
+
+        assertEquals(0, buildings.densityLevel(homeId), "base-ceiling satisfaction never clears the promotion threshold");
+    }
+
+    @Test
+    void demolishingTheParkDemotesAPreviouslyMaxedOutBuilding() {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+        chunk.zoneType[Chunk.tileIndex(9, 5)] = WorldConstants.ZONE_COMMERCIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+        int parkId = buildings.create(BuildingType.PARK, 10, 22, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 22)] = parkId;
+        int museumId = buildings.create(BuildingType.MUSEUM, 10, 23, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 23)] = museumId;
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        int homeId = -1;
+        for (int i = 0; i < 80; i++) {
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
+            homeId = chunk.buildingId[Chunk.tileIndex(11, 5)];
+        }
+        assertEquals(BuildingDensity.MAX_LEVEL, buildings.densityLevel(homeId), "sanity check: must be maxed out before demolition");
+        int populationBeforeDemolition = buildings.population(homeId);
+
+        buildings.demolish(parkId);
+        buildings.demolish(museumId);
+        chunk.buildingId[Chunk.tileIndex(10, 22)] = WorldConstants.NO_BUILDING;
+        chunk.buildingId[Chunk.tileIndex(10, 23)] = WorldConstants.NO_BUILDING;
+
+        for (int i = 0; i < 40; i++) {
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
+        }
+
+        assertTrue(buildings.densityLevel(homeId) < BuildingDensity.MAX_LEVEL,
+            "losing luxury coverage should demote a maxed-out building");
+        assertTrue(buildings.population(homeId) <= populationBeforeDemolition,
+            "a demotion must never leave more occupants than the new, smaller capacity allows");
+    }
 }

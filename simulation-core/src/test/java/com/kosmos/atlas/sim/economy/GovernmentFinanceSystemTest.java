@@ -1,6 +1,7 @@
 package com.kosmos.atlas.sim.economy;
 
 import com.kosmos.atlas.sim.city.CityRegistry;
+import com.kosmos.atlas.sim.population.BuildingDensity;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import org.junit.jupiter.api.Test;
@@ -105,6 +106,27 @@ class GovernmentFinanceSystemTest {
             - BuildingEconomics.maintenancePerAccrual(BuildingType.MUSEUM);
         assertTrue(expectedNet > 0, "the Museum should be net-positive after its own upkeep");
         assertEquals(expectedNet, cities.finance(cityId).treasuryBalance() - before, 1e-9);
+    }
+
+    @Test
+    void higherDensityLevelYieldsMoreRevenueForTheSamePopulation() {
+        BuildingRegistry buildings = new BuildingRegistry();
+        CityRegistry cities = new CityRegistry();
+        int cityId = cities.create("Testville", 0, 0, 0);
+        int starterHome = buildings.create(BuildingType.RESIDENTIAL, 0, 0, cityId);
+        buildings.setPopulation(starterHome, 100);
+
+        double beforeStarter = cities.finance(cityId).treasuryBalance();
+        new GovernmentFinanceSystem().tick(buildings, cities);
+        double starterRevenue = cities.finance(cityId).treasuryBalance() - beforeStarter;
+
+        buildings.setDensityLevel(starterHome, BuildingDensity.MAX_LEVEL);
+        double beforeSkyscraper = cities.finance(cityId).treasuryBalance();
+        new GovernmentFinanceSystem().tick(buildings, cities);
+        double skyscraperRevenue = cities.finance(cityId).treasuryBalance() - beforeSkyscraper;
+
+        assertTrue(skyscraperRevenue > starterRevenue,
+            "the same 100 residents should tax for more once the building is a high-density skyscraper");
     }
 
     @Test

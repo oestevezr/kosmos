@@ -18,8 +18,9 @@ import java.nio.file.Path;
 public final class BuildingRegistryIO {
 
     private static final int MAGIC = 0x41544252; // "ATBR"
-    /** Bumped to 3 in the multi-city refactor to add the owning cityId field (spec §32). */
-    private static final int FORMAT_VERSION = 3;
+    /** Bumped to 4 by the density-evolution mechanic to add densityLevel (spec §32 applies to
+     *  save formats too: a format change must be a deliberate version bump). */
+    private static final int FORMAT_VERSION = 4;
     private static final int MAX_BUILDINGS = 1 << 22; // ~4M buildings — generous, still bounded
 
     public static void write(Path file, BuildingRegistry registry) throws IOException {
@@ -46,6 +47,7 @@ public final class BuildingRegistryIO {
                 body.writeByte(registry.incomeLevel(id));
                 body.writeByte(registry.employmentRatePercent(id));
                 body.writeByte(registry.satisfactionPercent(id));
+                body.writeByte(registry.densityLevel(id));
                 body.writeByte(registry.outputGood(id));
                 body.writeInt(registry.outputRatePerTick(id));
                 body.writeByte(registry.inputGood(id));
@@ -88,12 +90,13 @@ public final class BuildingRegistryIO {
                 byte incomeLevel = bodyIn.readByte();
                 int employmentRate = bodyIn.readUnsignedByte();
                 int satisfaction = bodyIn.readUnsignedByte();
+                int densityLevel = bodyIn.readUnsignedByte();
                 byte outputGood = bodyIn.readByte();
                 int outputRate = bodyIn.readInt();
                 byte inputGood = bodyIn.readByte();
                 int inputRate = bodyIn.readInt();
                 registry.restoreActive(id, type, tileX, tileY, cityId, population, jobs,
-                    incomeLevel, employmentRate, satisfaction, outputGood, outputRate, inputGood, inputRate);
+                    incomeLevel, employmentRate, satisfaction, densityLevel, outputGood, outputRate, inputGood, inputRate);
             }
             return registry;
         }

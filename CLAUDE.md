@@ -119,6 +119,17 @@ el código fuente.
   tier 1)/`INCINERATOR`; solo `PARK` reduce. `PopulationSystem` resta la contaminación del techo de
   satisfacción (piso 10); los edificios industriales son inmunes a su propia contaminación. Un solo
   eje cubre pollution+noise por ahora — eje de ruido separado queda como deuda documentada.
+- **Densidad evolutiva de edificios**: completa (pedido explícito del usuario, fuera de la
+  secuencia MVP del spec, ver `docs/roadmap.md`). Último pendiente real del pedido original sobre
+  edificios cívicos/densidad. Reutiliza el techo de satisfacción ya existente de
+  `PopulationSystem` como requisito de servicios — sin chequeo de cobertura nuevo.
+  `BuildingRegistry.densityLevel` (nuevo `byte[]`) + `BuildingDensity` (nueva clase,
+  `sim.population`): capacidad/umbrales de promoción-degradación (con histéresis)/multiplicador de
+  impuestos por nivel, más un `variantIndex` determinista (no almacenado) listo para cuando
+  `game-client` dibuje edificios. `PopulationSystem.updateDensityLevel` promueve un edificio lleno
+  y satisfecho, degrada uno que perdió cobertura (recortando ocupantes a la nueva capacidad).
+  `GovernmentFinanceSystem` pondera la base gravable por `wageMultiplier` del nivel.
+  `BuildingRegistryIO.FORMAT_VERSION` 3→4, saves viejos no cargan.
 - **MVP 0.6 (Regional Passenger Transport) en adelante**: solo planificado (`docs/roadmap.md`),
   sin código.
 

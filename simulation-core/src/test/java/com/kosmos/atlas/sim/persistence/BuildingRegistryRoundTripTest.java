@@ -23,6 +23,7 @@ class BuildingRegistryRoundTripTest {
         original.setIncomeLevel(home, (byte) 2);
         original.setEmploymentRatePercent(home, 77);
         original.setSatisfactionPercent(home, 60);
+        original.setDensityLevel(home, 2);
 
         int shop = original.create(BuildingType.COMMERCIAL, 11, 20, 1);
         original.setJobs(shop, 15);
@@ -44,6 +45,7 @@ class BuildingRegistryRoundTripTest {
         assertEquals(2, loaded.incomeLevel(home));
         assertEquals(77, loaded.employmentRatePercent(home));
         assertEquals(60, loaded.satisfactionPercent(home));
+        assertEquals(2, loaded.densityLevel(home));
 
         assertTrue(loaded.isActive(shop));
         assertEquals(15, loaded.jobs(shop));

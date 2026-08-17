@@ -1,6 +1,7 @@
 package com.kosmos.atlas.sim.economy;
 
 import com.kosmos.atlas.sim.city.CityRegistry;
+import com.kosmos.atlas.sim.population.BuildingDensity;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 
@@ -31,9 +32,9 @@ public final class GovernmentFinanceSystem {
         // "effectively final" capture rule. This runs every finance tick per city (spec §41,
         // §42.4), and city counts are small enough that an O(buildings) scan per city is cheap —
         // see docs/roadmap.md's multi-city notes for why this wasn't optimized further.
-        long residentialPop = 0;
-        long commercialJobs = 0;
-        long industrialJobs = 0;
+        double residentialPop = 0;
+        double commercialJobs = 0;
+        double industrialJobs = 0;
         double maintenance = 0;
         double civicRevenue = 0;
         int highWaterMark = buildings.highWaterMark();
@@ -42,16 +43,20 @@ public final class GovernmentFinanceSystem {
                 continue;
             }
             byte type = buildings.type(id);
+            // Taller buildings house higher-value residents/businesses, so they're weighted as
+            // more "taxable heads" per actual occupant (BuildingDensity's wageMultiplier) — a
+            // skyscraper's population pays more tax than the same headcount in starter buildings.
+            double wageMultiplier = BuildingDensity.wageMultiplier(buildings.densityLevel(id));
             switch (type) {
-                case BuildingType.RESIDENTIAL -> residentialPop += buildings.population(id);
-                case BuildingType.COMMERCIAL -> commercialJobs += buildings.jobs(id);
-                case BuildingType.INDUSTRIAL -> industrialJobs += buildings.jobs(id);
+                case BuildingType.RESIDENTIAL -> residentialPop += buildings.population(id) * wageMultiplier;
+                case BuildingType.COMMERCIAL -> commercialJobs += buildings.jobs(id) * wageMultiplier;
+                case BuildingType.INDUSTRIAL -> industrialJobs += buildings.jobs(id) * wageMultiplier;
                 default -> { /* utility/production buildings pay no tax */ }
             }
             maintenance += BuildingEconomics.maintenancePerAccrual(type);
             civicRevenue += BuildingEconomics.revenuePerAccrual(type);
         }
-        cities.finance(cityId).collectRevenue(residentialPop, commercialJobs, industrialJobs);
+        cities.finance(cityId).collectRevenue(Math.round(residentialPop), Math.round(commercialJobs), Math.round(industrialJobs));
         double net = civicRevenue - maintenance;
         if (net != 0) {
             cities.finance(cityId).adjustTreasury(net);

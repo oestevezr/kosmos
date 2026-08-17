@@ -602,6 +602,54 @@ con JDK 17 en el `PATH` y registrar la cifra real en `docs/architecture.md` §10
 
 ---
 
+## Densidad evolutiva de edificios — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+Último pendiente real del pedido original sobre edificios cívicos/densidad, diferido dos veces por
+no tener enganche arquitectónico con `BuildingEconomics`/`UtilitySystem`. Antes de esto,
+`PopulationSystem` crecía cada edificio hasta un tope plano (`RESIDENTIAL_CAPACITY=60`,
+`JOB_CAPACITY=40`) y ahí se quedaba para siempre: una ciudad con servicios de lujo y una sin ellos
+terminaban con edificios idénticos. Tres decisiones se cerraron con el usuario: disparador orgánico
+(lleno + satisfecho, no desbloqueo global ni densidad pintada por el jugador), representación como
+un campo `densityLevel` por edificio (no `BuildingType` nuevos), y los cuatro efectos: capacidad,
+impuestos, requisito de servicios más exigente, semilla de variante visual.
+
+### Diseño: el techo de satisfacción ya existente *es* el requisito de servicios
+`PopulationSystem.satisfactionCeiling` ya produce tres mesetas (60 sin prosperidad, 85 con
+prosperidad, 100 con lujo) que la contaminación ya baja (ver sección anterior). En vez de inventar
+un chequeo de cobertura nuevo, `BuildingDensity` (nuevo, `sim.population`) define umbrales de
+satisfacción por nivel —promoción 75/92, degradación 65/88, con histéresis para que un edificio no
+oscile cerca del límite— así que "un rascacielos necesita mejor cobertura que una casa" cae solo del
+modelo existente. Subir de nivel exige además estar lleno (`population >= capacidad del nivel
+actual`), que da la demora natural sin un contador de ticks nuevo.
+
+`BuildingRegistry` gana un `byte[] densityLevel` (mismo molde que `satisfactionPercent`).
+`PopulationSystem.growExistingBuildings` llama a `updateDensityLevel` justo después de actualizar
+satisfacción y antes de crecer — promueve o degrada como máximo un nivel por tick, recortando
+población/empleos a la capacidad del nivel nuevo en una degradación. `growResidential`/
+`growWorkplace` leen la capacidad de `BuildingDensity` en vez de las constantes planas
+(`RESIDENTIAL_CAPACITY`/`JOB_CAPACITY` se conservan como los valores del nivel 0, sin romper nada
+que las usaba). `GovernmentFinanceSystem` pondera cada edificio por `BuildingDensity.wageMultiplier`
+antes de sumarlo a la base gravable — un rascacielos tributa 1.8× por habitante que una casa chica,
+sin tocar la firma de `GovernmentFinance.collectRevenue`. `variantIndex(tileX, tileY, level,
+variantCount)` es un hash entero puro y determinista (no almacenado — el mundo ya es determinista
+desde la semilla), listo para que `game-client` elija sprite el día que dibuje edificios.
+
+### Fuera de alcance
+- Renderizado: `game-client` sigue dibujando solo terreno; `variantIndex` no tiene consumidor
+  todavía.
+- Bumpear la versión de render del chunk al subir de nivel — no hay nada que redibujar hoy. Primer
+  enganche pendiente cuando el cliente empiece a dibujar edificios.
+- Densidad pintada por el jugador (zonas de densidad baja/media/alta) — descartada explícitamente.
+- Que `incomeLevel` (ya existente, sin uso desde spec §22) haga algo — sigue sin escritor, es un
+  concepto distinto (riqueza de residentes) y no se mezcló con `densityLevel`.
+
+### Persistencia
+`BuildingRegistryIO.FORMAT_VERSION` 3 → 4, `densityLevel` como un byte más por edificio activo.
+Saves viejos no cargan.
+
+---
+
 ## MVP 0.6 — Regional Passenger Transport
 
 ### Qué pide el spec

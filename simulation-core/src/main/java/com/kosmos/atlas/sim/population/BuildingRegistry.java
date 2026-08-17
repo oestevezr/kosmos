@@ -32,6 +32,9 @@ public final class BuildingRegistry {
     private byte[] incomeLevel;
     private byte[] employmentRatePercent;
     private byte[] satisfactionPercent;
+    /** How many times this building has evolved (0 = starter, see {@code BuildingDensity}). Only
+     *  meaningful for RESIDENTIAL/COMMERCIAL/INDUSTRIAL — stays 0 for every other type. */
+    private byte[] densityLevel;
     private boolean[] active;
 
     // --- MVP 0.3 production chain (spec §7, §21) ---
@@ -60,6 +63,7 @@ public final class BuildingRegistry {
         incomeLevel = new byte[capacity];
         employmentRatePercent = new byte[capacity];
         satisfactionPercent = new byte[capacity];
+        densityLevel = new byte[capacity];
         active = new boolean[capacity];
         freeIds = new int[capacity];
         outputGood = new byte[capacity];
@@ -101,6 +105,7 @@ public final class BuildingRegistry {
         incomeLevel[id] = 0;
         employmentRatePercent[id] = 0;
         satisfactionPercent[id] = 50;
+        densityLevel[id] = 0;
         outputGood[id] = outputGoodType;
         outputRatePerTick[id] = outputRate;
         inputGood[id] = inputGoodType;
@@ -126,7 +131,7 @@ public final class BuildingRegistry {
     /** Directly installs an active building at {@code id} during restore. See {@link #createForRestore}. */
     public void restoreActive(int id, byte buildingType, int worldTileX, int worldTileY, int ownerCityId,
                                int populationValue, int jobsValue, byte incomeLevelValue,
-                               int employmentRatePercentValue, int satisfactionPercentValue,
+                               int employmentRatePercentValue, int satisfactionPercentValue, int densityLevelValue,
                                byte outputGoodType, int outputRate, byte inputGoodType, int inputRate) {
         type[id] = buildingType;
         tileX[id] = worldTileX;
@@ -137,6 +142,7 @@ public final class BuildingRegistry {
         incomeLevel[id] = incomeLevelValue;
         employmentRatePercent[id] = (byte) clampPercent(employmentRatePercentValue);
         satisfactionPercent[id] = (byte) clampPercent(satisfactionPercentValue);
+        densityLevel[id] = (byte) densityLevelValue;
         outputGood[id] = outputGoodType;
         outputRatePerTick[id] = outputRate;
         inputGood[id] = inputGoodType;
@@ -170,6 +176,7 @@ public final class BuildingRegistry {
         incomeLevel = Arrays.copyOf(incomeLevel, newCapacity);
         employmentRatePercent = Arrays.copyOf(employmentRatePercent, newCapacity);
         satisfactionPercent = Arrays.copyOf(satisfactionPercent, newCapacity);
+        densityLevel = Arrays.copyOf(densityLevel, newCapacity);
         active = Arrays.copyOf(active, newCapacity);
         freeIds = Arrays.copyOf(freeIds, newCapacity);
         outputGood = Arrays.copyOf(outputGood, newCapacity);
@@ -187,6 +194,7 @@ public final class BuildingRegistry {
         active[id] = false;
         population[id] = 0;
         jobs[id] = 0;
+        densityLevel[id] = 0;
         outputGood[id] = GoodType.NONE;
         outputRatePerTick[id] = 0;
         inputGood[id] = GoodType.NONE;
@@ -285,6 +293,14 @@ public final class BuildingRegistry {
 
     public void setSatisfactionPercent(int id, int percent0to100) {
         satisfactionPercent[id] = (byte) clampPercent(percent0to100);
+    }
+
+    public int densityLevel(int id) {
+        return densityLevel[id] & 0xFF;
+    }
+
+    public void setDensityLevel(int id, int level) {
+        densityLevel[id] = (byte) level;
     }
 
     /** The good this building produces, or {@link GoodType#NONE} if it doesn't produce anything. */
