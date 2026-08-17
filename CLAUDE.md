@@ -166,6 +166,18 @@ el código fuente.
   `glBlendFunc` pese a habilitar `GL_BLEND` (no importaba hasta que el tinte de zona lo necesitó).
   `AtlasGame.create()` ahora funda una ciudad demo (antes no colocaba nada) para que el cambio sea
   visible. Verificado con `screencapture -x`.
+- **Fundido al aparecer un chunk nuevo + fix de cámara inicial** (fuera de la secuencia MVP del
+  spec, pedido explícito del usuario, ver `docs/roadmap.md`). `ChunkMesh` gana `spawnedAtMillis`
+  (vía `TimeUtils.millis()`, seteado solo en el constructor, nunca en `rebuild()`) y
+  `currentAlpha()` (fundido lineal 300ms); `WorldRenderer` reemplaza
+  `SpriteBatch.createDefaultShader()` por uno propio (`ChunkShaderSource`, GLSL inline) con un
+  uniform `u_chunkAlpha` seteado por chunk antes de cada `mesh.render(shader)` — sin forzar rebuilds,
+  reutiliza el blending ya activado. **Bug real encontrado y arreglado en la misma pasada**:
+  `OrthographicCamera.setToOrtho(...)` resetea `camera.position` al centro del viewport cada vez que
+  se llama, y LWJGL3 dispara un `resize()` inicial justo después de `create()` que pisaba en
+  silencio el centrado de cámara sobre la ciudad demo — la ventana arrancaba mostrando mayormente
+  chunks sin cargar. `AtlasGame` gana `demoCenterTileX`/`demoCenterTileY` +
+  `recenterCameraOnDemoSettlement()`, reaplicado tanto al sembrar la demo como en `resize()`.
 
 ## Estructura del proyecto
 

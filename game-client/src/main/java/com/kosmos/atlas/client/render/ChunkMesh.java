@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.VertexAttribute;
 import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
+import com.badlogic.gdx.utils.TimeUtils;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.WorldConstants;
@@ -17,13 +18,14 @@ import com.kosmos.atlas.sim.world.WorldConstants;
  * cached the CPU-side screen positions and still re-submitted a fresh {@code SpriteBatch.draw}
  * call (and fresh vertex data) for all 1024 tiles every single frame regardless of whether
  * anything changed. Now a chunk's vertex data is written to the GPU once, on
- * {@link #rebuild(Chunk, PlaceholderAtlasGenerator.Atlas)}, and reused by {@link #render(ShaderProgram)}
+ * {@link #rebuild(Chunk, PlaceholderAtlasGenerator.Atlas, BuildingRegistry)}, and reused by {@link #render(ShaderProgram)}
  * every subsequent frame until the chunk's version changes again.
  *
- * <p>Vertex layout matches {@code SpriteBatch}'s own default (Position2, ColorPacked, TexCoords2)
- * so rendering can reuse {@link com.badlogic.gdx.graphics.g2d.SpriteBatch#createDefaultShader()}
- * instead of hand-writing a GLSL program — one fewer thing to get wrong by hand (spec §44.2:
- * minimize state changes, not reinvent the pipeline).
+ * <p>Vertex layout matches {@code SpriteBatch}'s own default (Position2, ColorPacked, TexCoords2).
+ * {@link WorldRenderer} used to reuse {@code SpriteBatch.createDefaultShader()} verbatim; it now
+ * builds an almost-identical shader ({@link ChunkShaderSource}) with one added uniform
+ * ({@code u_chunkAlpha}) for the fade-in described below — still hand-written to a minimum, not a
+ * general-purpose shader (spec §44.2: minimize state changes, not reinvent the pipeline).
  *
  * <p>Each tile always contributes a terrain quad, plus at most one overlay quad on top — a road,
  * or a building (colored by category), or an empty zoned lot's semi-transparent tint, in that
@@ -39,6 +41,11 @@ import com.kosmos.atlas.sim.world.WorldConstants;
  * already keys rebuilds on, so no extra dirty-tracking is needed. A building's color depends only
  * on its (immutable-once-built) {@code BuildingType}, never on density/population, so this stays
  * true even though {@code BuildingRegistry} mutations don't themselves touch {@code Chunk}.
+ *
+ * <p>{@link #currentAlpha()} drives a short fade-in the very first time this chunk becomes visible
+ * (streaming a new chunk in should be a soft transition, not an instant pop) — {@link #spawnedAtMillis}
+ * is stamped once, in the constructor, and never touched by {@link #rebuild}, so editing an
+ * already-loaded chunk's content (a road, a new building) never re-triggers the fade.
  */
 final class ChunkMesh implements com.badlogic.gdx.utils.Disposable {
 
@@ -47,9 +54,11 @@ final class ChunkMesh implements com.badlogic.gdx.utils.Disposable {
     private static final int INDICES_PER_TILE = 6;
     private static final int MAX_QUADS_PER_CHUNK = WorldConstants.TILES_PER_CHUNK * 2;
     private static final float WHITE_BITS = Color.WHITE.toFloatBits();
+    private static final long FADE_DURATION_MILLIS = 300;
 
     private final Mesh mesh;
     private final float[] vertexScratch = new float[MAX_QUADS_PER_CHUNK * VERTICES_PER_TILE * FLOATS_PER_VERTEX];
+    private final long spawnedAtMillis = TimeUtils.millis();
 
     int builtVersion = -1;
     private int quadCount;
@@ -153,6 +162,13 @@ final class ChunkMesh implements com.badlogic.gdx.utils.Disposable {
         out[offset++] = u;
         out[offset++] = v;
         return offset;
+    }
+
+    /** Linear fade from 0 to 1 over {@link #FADE_DURATION_MILLIS} since this mesh was first
+     *  created — see class javadoc for why this only ever fires once per chunk's lifetime. */
+    float currentAlpha() {
+        float t = TimeUtils.timeSinceMillis(spawnedAtMillis) / (float) FADE_DURATION_MILLIS;
+        return Math.max(0f, Math.min(1f, t));
     }
 
     void render(ShaderProgram shader) {

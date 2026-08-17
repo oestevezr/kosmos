@@ -1,7 +1,6 @@
 package com.kosmos.atlas.client.render;
 
 import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
@@ -40,7 +39,10 @@ public final class WorldRenderer implements com.badlogic.gdx.utils.Disposable {
     public WorldRenderer() {
         this.atlas = PlaceholderAtlasGenerator.generate();
         this.renderCache = new ChunkRenderCache(atlas);
-        this.shader = SpriteBatch.createDefaultShader();
+        this.shader = new ShaderProgram(ChunkShaderSource.VERTEX, ChunkShaderSource.FRAGMENT);
+        if (!shader.isCompiled()) {
+            throw new IllegalStateException("ChunkShaderSource failed to compile: " + shader.getLog());
+        }
     }
 
     public int lastVisibleChunkCount() {
@@ -82,6 +84,7 @@ public final class WorldRenderer implements com.badlogic.gdx.utils.Disposable {
                 if (mesh == null) {
                     continue; // rebuild-budget exhausted this frame; draw it next frame instead
                 }
+                shader.setUniformf("u_chunkAlpha", mesh.currentAlpha());
                 mesh.render(shader);
                 drawnTiles += WorldConstants.TILES_PER_CHUNK;
             }

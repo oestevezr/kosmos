@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.kosmos.atlas.client.camera.WorldCameraController;
+import com.kosmos.atlas.client.render.IsoProjection;
 import com.kosmos.atlas.client.render.WorldRenderer;
 import com.kosmos.atlas.client.ui.DebugOverlay;
 import com.kosmos.atlas.sim.WorldManager;
@@ -39,6 +40,14 @@ public final class AtlasGame extends ApplicationAdapter {
     private DebugOverlay debugOverlay;
     private boolean showDebugOverlay = true;
 
+    /** Set once {@link #seedDemoSettlement()} places something to look at; {@code resize()} needs
+     *  it too, since {@code OrthographicCamera.setToOrtho} resets {@code camera.position} back to
+     *  the viewport center every time it runs — including the initial resize event most LWJGL3
+     *  backends fire right after {@code create()}, which would otherwise silently discard the
+     *  centering done in {@code create()} before the very first frame is even drawn. -1 = unset. */
+    private int demoCenterTileX = -1;
+    private int demoCenterTileY;
+
     @Override
     public void create() {
         WorldGenSettings genSettings = WorldGenSettings.balanced(DEMO_SEED, DEMO_WORLD_SIZE_TILES);
@@ -57,7 +66,10 @@ public final class AtlasGame extends ApplicationAdapter {
      * Founds a small demo settlement near the origin (road + zones + power/water, same recipe as
      * {@code headless-runner}'s {@code HeadlessMain.runCityGrowthScenario}) so the render change
      * that made zones/roads/buildings visible for the first time actually has something to show —
-     * pure demo wiring, not a simulation rule (this class's own javadoc constraint).
+     * pure demo wiring, not a simulation rule (this class's own javadoc constraint). Also centers
+     * the camera on it: {@code camera} otherwise starts at world tile (0,0), which rarely lines up
+     * with wherever {@link #findLandRun} actually placed the settlement — leaving most of the
+     * initial view pointed at unloaded chunks (nothing streamed there yet) until the player pans.
      */
     private void seedDemoSettlement() {
         world.updateCameraFocus(16, 16); // chunk (0,0)
@@ -88,6 +100,30 @@ public final class AtlasGame extends ApplicationAdapter {
         world.submitCommand(new ZoneCommand(roadStart + 3, 17, WorldConstants.ZONE_INDUSTRIAL));
         world.submitCommand(new BuildPowerPlantCommand(roadStart + 5, 15));
         world.submitCommand(new BuildWaterTowerCommand(roadStart + 5, 17));
+
+        demoCenterTileX = roadStart + 4;
+        demoCenterTileY = 16;
+        recenterCameraOnDemoSettlement();
+        world.updateCameraFocus(demoCenterTileX, demoCenterTileY);
+        // Give the streaming radius around the new focus a moment to catch up before the first
+        // real frame renders, same spirit as the wait above for chunk (0,0).
+        long focusDeadlineNanos = System.nanoTime() + 3_000_000_000L;
+        while (System.nanoTime() < focusDeadlineNanos) {
+            world.update(1.0 / 30.0);
+        }
+    }
+
+    /** Re-applies the demo settlement's camera centering — needed after any
+     *  {@code camera.setToOrtho} call, which resets {@code camera.position} to the viewport center
+     *  (see {@link #demoCenterTileX}'s javadoc). No-op if {@link #seedDemoSettlement()} never found
+     *  anywhere to center on. */
+    private void recenterCameraOnDemoSettlement() {
+        if (demoCenterTileX < 0) {
+            return;
+        }
+        camera.position.set(IsoProjection.screenX(demoCenterTileX, demoCenterTileY),
+            IsoProjection.screenY(demoCenterTileX, demoCenterTileY, (short) 0), 0);
+        camera.update();
     }
 
     private static int findLandRun(byte[] terrainType, int y, int runLength) {
@@ -134,6 +170,7 @@ public final class AtlasGame extends ApplicationAdapter {
     @Override
     public void resize(int width, int height) {
         camera.setToOrtho(false, width, height);
+        recenterCameraOnDemoSettlement();
     }
 
     @Override

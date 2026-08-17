@@ -844,6 +844,57 @@ verde/azul/caqui según categoría, 60 FPS estables, comandos 15/0 (igual que el
 
 ---
 
+## Fundido al aparecer un chunk nuevo — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+El usuario preguntó si se podían "alinear los bordes de chunk como en TheoTown". El **contenido**
+del terreno ya no tiene costura: `ProceduralGenerator` muestrea el ruido en coordenadas de tile
+absolutas, no relativas al chunk, así que dos chunks vecinos generan terreno perfectamente continuo
+— confirmado por inspección de código, sin necesidad de tocar `simulation-core`. Lo que faltaba era
+pulir la **aparición**: `WorldRenderer` dibujaba un chunk recién integrado por
+`ChunkManager.integrateReadyChunks` opaco y completo desde el primer frame — un "pop" instantáneo.
+
+### Diseño: alpha-fade por chunk vía shader propio, no por vértice
+Rehacer el color por vértice habría forzado un `rebuild()` en cada frame del fundido, rompiendo el
+invariante central de `ChunkMesh` (solo se reconstruye cuando `chunk.version()` cambia). En vez de
+eso, `WorldRenderer` reemplazó `SpriteBatch.createDefaultShader()` por un `ShaderProgram` propio
+(`ChunkShaderSource`, GLSL inline — mismo criterio de "todo código-generado, sin assets" que
+`PlaceholderAtlasGenerator`) con un uniform extra `u_chunkAlpha`, multiplicado en el canal alfa del
+fragment shader y seteado una vez por chunk justo antes de su `mesh.render(shader)` — mismo costo
+que ya tenía el draw-call por chunk. Reutiliza el blending (`GL_BLEND` +
+`glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)`) que ya se había activado para el tinte de zona.
+
+`ChunkMesh` gana `spawnedAtMillis` (vía `TimeUtils.millis()`, idioma estándar de libGDX) **seteado
+una sola vez, en el constructor** — nunca en `rebuild()`. Clave: un chunk que ya está cargado y solo
+cambia de contenido (el jugador construye una carretera) no vuelve a fundirse, solo el chunk que
+recién aparece por streaming/pan. `currentAlpha()` hace un fundido lineal de 300ms.
+
+### Bug de cámara encontrado y arreglado en la misma pasada
+Al verificar con `screencapture -x`, la ventana mostraba mayormente negro con solo un triángulo de
+mundo visible en una esquina — parecía una regresión del fundido, pero comparado directamente contra
+el build ya commiteado (sin este cambio) el patrón era **idéntico**, descartándolo como causa
+(confirmado también con una traza de diagnóstico temporal: el alfa por chunk ya estaba en 1.0). El
+usuario confirmó la pista real: al mover la cámara con las flechas, el mapa aparecía normalmente —
+o sea, el contenido estaba cargado, la cámara arrancaba apuntando a otro lado.
+
+Causa real: `OrthographicCamera.setToOrtho(...)` resetea `camera.position` al centro del viewport en
+píxeles cada vez que se llama — y LWJGL3 dispara un evento `resize()` inicial justo después de
+`create()`, que vuelve a llamar `setToOrtho` y **pisa silenciosamente** cualquier centrado de cámara
+hecho en `create()` antes del primer frame. `AtlasGame` gana `demoCenterTileX`/`demoCenterTileY`
+(seteados por `seedDemoSettlement()` al terminar de sembrar) y `recenterCameraOnDemoSettlement()`,
+llamado tanto al final de `seedDemoSettlement()` como al final de `resize()` — así sobrevive al
+resize inicial. Verificado: la cámara ahora arranca centrada sobre el asentamiento demo sin necesitar
+mover nada (`visible chunks: 6` cubriendo toda la ventana, antes solo `4` en una esquina).
+
+### Fuera de alcance
+- Fundido por edición de contenido — solo aplica a la primera aparición del chunk.
+- Easing no lineal.
+- Si el jugador redimensiona la ventana después de haber paneado manualmente, `resize()` vuelve a
+  centrar sobre el asentamiento demo en vez de respetar el pan — aceptable por ahora, es wiring de
+  demo, no una función real de cámara persistente.
+
+---
+
 ## Preguntas resueltas
 
 1. ~~`TradeDepot` como gateway temprano~~ — resuelto (MVP 0.3): placeable desde 0.3.
