@@ -5,6 +5,7 @@ import com.kosmos.atlas.sim.commands.Command;
 import com.kosmos.atlas.sim.commands.CommandDecoder;
 import com.kosmos.atlas.sim.commands.CommandResult;
 import com.kosmos.atlas.sim.commands.SimulationContext;
+import com.kosmos.atlas.sim.economy.BuildingEconomics;
 import com.kosmos.atlas.sim.economy.GoodType;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
@@ -77,6 +78,12 @@ public final class BuildPortCommand extends Command {
         if (cityId < 0) {
             return CommandResult.REJECTED_NO_CITY_FOUNDED;
         }
+
+        double cost = BuildingEconomics.constructionCost(BuildingType.PORT);
+        if (cities.finance(cityId).treasuryBalance() < cost) {
+            return CommandResult.REJECTED_INSUFFICIENT_FUNDS;
+        }
+        cities.finance(cityId).adjustTreasury(-cost);
 
         BuildingRegistry buildings = ctx.requireBuildings();
         int id = buildings.create(BuildingType.PORT, tileX, tileY, cityId, GoodType.NONE, 0, GoodType.NONE, 0);

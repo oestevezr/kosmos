@@ -22,7 +22,7 @@ class GovernmentFinanceSystemTest {
         buildings.setJobs(shop, 20);
         int factory = buildings.create(BuildingType.INDUSTRIAL, 2, 0, cityId);
         buildings.setJobs(factory, 10);
-        // A power plant must not be taxed as if it were a workplace.
+        // A power plant must not be taxed as if it were a workplace — but it does cost upkeep.
         buildings.create(BuildingType.POWER_PLANT, 3, 0, cityId);
 
         double before = cities.finance(cityId).treasuryBalance();
@@ -30,7 +30,8 @@ class GovernmentFinanceSystemTest {
 
         double expected = 100 * 20.0 * GovernmentFinance.DEFAULT_TAX_RATE
             + 20 * 30.0 * GovernmentFinance.DEFAULT_TAX_RATE
-            + 10 * 25.0 * GovernmentFinance.DEFAULT_TAX_RATE;
+            + 10 * 25.0 * GovernmentFinance.DEFAULT_TAX_RATE
+            - BuildingEconomics.maintenancePerAccrual(BuildingType.POWER_PLANT);
         assertEquals(expected, cities.finance(cityId).treasuryBalance() - before, 1e-9);
     }
 
@@ -71,6 +72,23 @@ class GovernmentFinanceSystemTest {
         double atHigherRate = cities.finance(cityId).treasuryBalance() - beforeSecondTick;
 
         assertTrue(atHigherRate > atDefaultRate);
+    }
+
+    @Test
+    void maintenanceIsDeductedForEveryActiveUtilityBuildingRegardlessOfTax() {
+        BuildingRegistry buildings = new BuildingRegistry();
+        CityRegistry cities = new CityRegistry();
+        int cityId = cities.create("Testville", 0, 0, 0);
+        buildings.create(BuildingType.POWER_PLANT, 0, 0, cityId);
+        buildings.create(BuildingType.WATER_TOWER, 1, 0, cityId);
+
+        double before = cities.finance(cityId).treasuryBalance();
+        new GovernmentFinanceSystem().tick(buildings, cities);
+
+        double expectedMaintenance = BuildingEconomics.maintenancePerAccrual(BuildingType.POWER_PLANT)
+            + BuildingEconomics.maintenancePerAccrual(BuildingType.WATER_TOWER);
+        assertEquals(-expectedMaintenance, cities.finance(cityId).treasuryBalance() - before, 1e-9,
+            "no tax-generating buildings exist, so the only change should be upkeep");
     }
 
     @Test

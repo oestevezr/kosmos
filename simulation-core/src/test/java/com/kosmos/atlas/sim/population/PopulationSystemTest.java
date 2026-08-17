@@ -37,9 +37,9 @@ class PopulationSystemTest {
         return store;
     }
 
-    private void refreshServices(ChunkStore store, BuildingRegistry buildings) {
+    private void refreshServices(ChunkStore store, BuildingRegistry buildings, CityRegistry cities, UtilitySystem utility) {
         new RoadNetwork().update(store);
-        new UtilitySystem().update(store, buildings);
+        utility.update(store, buildings, cities);
     }
 
     @Test
@@ -53,10 +53,11 @@ class PopulationSystemTest {
 
         CityRegistry cities = oneCity();
         BuildingRegistry buildings = new BuildingRegistry();
+        UtilitySystem utility = new UtilitySystem();
         PopulationSystem system = new PopulationSystem();
         for (int i = 0; i < 5; i++) {
-            refreshServices(store, buildings);
-            system.tick(store, buildings, cities);
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
         }
 
         assertEquals(WorldConstants.NO_BUILDING, chunk.buildingId[Chunk.tileIndex(5, 5)]);
@@ -76,9 +77,10 @@ class PopulationSystemTest {
         int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
         chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
 
+        UtilitySystem utility = new UtilitySystem();
         PopulationSystem system = new PopulationSystem();
-        refreshServices(store, buildings);
-        system.tick(store, buildings, cities);
+        refreshServices(store, buildings, cities, utility);
+        system.tick(store, buildings, cities, utility);
 
         int builtId = chunk.buildingId[Chunk.tileIndex(11, 5)];
         assertTrue(builtId != WorldConstants.NO_BUILDING, "a serviced residential zone must settle");
@@ -100,10 +102,11 @@ class PopulationSystemTest {
         int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
         chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
 
+        UtilitySystem utility = new UtilitySystem();
         PopulationSystem system = new PopulationSystem();
         for (int i = 0; i < 20; i++) {
-            refreshServices(store, buildings);
-            system.tick(store, buildings, cities);
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
         }
 
         assertTrue(system.totalResidentialPopulation(1) > 6, "population should grow past its seed value given jobs demand");
@@ -133,10 +136,11 @@ class PopulationSystemTest {
         int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
         chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
 
+        UtilitySystem utility = new UtilitySystem();
         PopulationSystem system = new PopulationSystem();
         for (int i = 0; i < 5; i++) {
-            refreshServices(store, buildings);
-            system.tick(store, buildings, cities);
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
         }
         return system.totalResidentialPopulation(1);
     }
@@ -155,9 +159,10 @@ class PopulationSystemTest {
         int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
         chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
 
+        UtilitySystem utility = new UtilitySystem();
         PopulationSystem system = new PopulationSystem();
-        refreshServices(store, buildings);
-        system.tick(store, buildings, cities); // settle both zones
+        refreshServices(store, buildings, cities, utility);
+        system.tick(store, buildings, cities, utility); // settle both zones
 
         // Remove utilities entirely.
         buildings.demolish(plantId);
@@ -167,8 +172,8 @@ class PopulationSystemTest {
 
         long before = system.totalResidentialPopulation(1);
         for (int i = 0; i < 10; i++) {
-            refreshServices(store, buildings);
-            system.tick(store, buildings, cities);
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
         }
         assertEquals(before, system.totalResidentialPopulation(1), "unserviced buildings must not keep growing");
     }

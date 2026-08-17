@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.utility;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.world.Chunk;
@@ -40,6 +41,8 @@ class UtilitySystemAllocationTest {
         store.get(0, 0).buildingId[Chunk.tileIndex(10, 10)] = towerId;
 
         UtilitySystem system = new UtilitySystem();
+        CityRegistry cities = new CityRegistry();
+        cities.create("Testville", 5, 5, 0);
 
         com.sun.management.ThreadMXBean bean =
             (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
@@ -47,14 +50,14 @@ class UtilitySystemAllocationTest {
         bean.setThreadAllocatedMemoryEnabled(true);
 
         for (int i = 0; i < 50; i++) {
-            system.update(store, buildings); // warm-up: lets frontier/depthOf grow to steady size
+            system.update(store, buildings, cities); // warm-up: lets frontier/depthOf grow to steady size
         }
 
         long threadId = Thread.currentThread().getId();
         long before = bean.getThreadAllocatedBytes(threadId);
         int measuredCalls = 200;
         for (int i = 0; i < measuredCalls; i++) {
-            system.update(store, buildings);
+            system.update(store, buildings, cities);
         }
         long after = bean.getThreadAllocatedBytes(threadId);
 

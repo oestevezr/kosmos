@@ -105,4 +105,19 @@ class BuildProductionBuildingCommandTest {
         assertEquals(CommandResult.REJECTED_INVALID_TERRAIN,
             new BuildProductionBuildingCommand(10, 5, BuildingType.RESIDENTIAL).apply(ctx()));
     }
+
+    @Test
+    void farmRejectsWithoutEnoughFundsAndSpendsOnSuccess() {
+        int cityId = cities.nearestCity(5, 5);
+        double before = cities.finance(cityId).treasuryBalance();
+        cities.finance(cityId).adjustTreasury(-before); // zero it out
+
+        assertEquals(CommandResult.REJECTED_INSUFFICIENT_FUNDS,
+            new BuildProductionBuildingCommand(5, 5, BuildingType.FARM).apply(ctx()));
+
+        cities.finance(cityId).adjustTreasury(com.kosmos.atlas.sim.economy.BuildingEconomics.constructionCost(BuildingType.FARM));
+        assertEquals(CommandResult.ACCEPTED,
+            new BuildProductionBuildingCommand(5, 5, BuildingType.FARM).apply(ctx()));
+        assertEquals(0.0, cities.finance(cityId).treasuryBalance(), 1e-9);
+    }
 }

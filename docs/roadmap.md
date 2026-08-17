@@ -340,6 +340,86 @@ correcta, y los comandos de préstamo siguen leyendo el multiplicador de interé
 
 ---
 
+## Servicios cívicos por tiers — Fase 1: Electricidad y Agua — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+El usuario preguntó si edificios cívicos (ayuntamiento, banco central, policía, hospital,
+bomberos, educación, iglesias) ya estaban definidos — no lo estaban. Al diseñar la mejor mecánica
+se llegó a reutilizar `satisfactionPercent` (`BuildingRegistry`), calculado desde Fase 2 pero nunca
+consumido por nada. Al concretar el diseño, el usuario pidió algo inspirado en TheOtown: cada
+servicio no es un edificio único sino **varios tiers desbloqueables por población de la ciudad**
+(planta de luz chica y barata → hidroeléctrica → nuclear), cada uno con su propio costo de
+construcción, mantenimiento, radio de cobertura y **capacidad real** (población servida vs.
+generada, no solo "¿está en rango?"). También confirmó que, en teoría, todo cuesta dinero en el
+juego — hasta este cambio, nada costaba nada (ni carreteras, ni fábricas, ni Trade Depot/Port).
+
+Dado el tamaño del pedido completo (7+ categorías de servicio × 2-3 tiers cada una), se dividió
+en fases explícitamente acordadas con el usuario. Esta es la Fase 1: construye toda la maquinaria
+genérica (tiers, desbloqueo por población, capacidad/demanda, costo/mantenimiento) y la prueba de
+punta a punta sobre las dos categorías esenciales ya existentes, Electricidad y Agua.
+
+### Sistema de costos base (aplica a todo, no solo a los tiers nuevos)
+- `BuildRoadCommand`/`ZoneCommand` ganaron resolución de ciudad (antes eran los únicos dos
+  comandos de construcción que no la exigían — cierra un hueco real del refactor multi-ciudad) y
+  costo: 50/tile de carretera; 150/200/200 al zonificar residencial/comercial/industrial
+  (`ZoneCommand.RESIDENTIAL_COST`/etc.), gratis des-zonificar. El costo de las RCI vive
+  deliberadamente aquí y no en `PopulationSystem.settleEmptyZonedTiles` (nacimiento orgánico, que
+  sigue gratis) — "delimitar la zona es la infraestructura", decisión explícita del usuario.
+- `BuildProductionBuildingCommand`/`BuildPortCommand`/`AbstractPlaceUtilityBuildingCommand` ganaron
+  chequeo de fondos (`CommandResult.REJECTED_INSUFFICIENT_FUNDS`) contra
+  `BuildingEconomics.constructionCost(type)`.
+- Nuevo `CommandResult.REJECTED_INSUFFICIENT_FUNDS` y `REJECTED_SERVICE_TIER_LOCKED`.
+
+### Tiers de Electricidad y Agua
+`BuildingType.POWER_PLANT` (existente) es tier 1; se agregan `POWER_PLANT_HYDRO` (tier 2) y
+`POWER_PLANT_NUCLEAR` (tier 3). Igual para agua: `WATER_TOWER` (tier 1) → `WATER_TREATMENT_PLANT`
+→ `DESALINATION_PLANT`. Cada tier se desbloquea por población total de la ciudad
+(`BuildingEconomics.unlockPopulation`, calculado con un scan de `BuildingRegistry` en el momento
+de construir — el mismo patrón O(edificios) que ya usa `GovernmentFinanceSystem`, aceptable porque
+es un comando raro del jugador, no un hot loop). 4 comandos nuevos, mismo patrón que
+`BuildPowerPlantCommand`/`BuildWaterTowerCommand`: `BuildHydroelectricPlantCommand`,
+`BuildNuclearPlantCommand`, `BuildWaterTreatmentPlantCommand`, `BuildDesalinationPlantCommand`.
+
+`BuildingEconomics` (nuevo, `sim.economy`) — tabla estática por `BuildingType` con costo de
+construcción, mantenimiento por acumulación (mismo ciclo que impuestos/interés de préstamos),
+capacidad, radio de cobertura y población de desbloqueo. Mismo patrón que
+`GoodsLedger.DEFAULT_BASE_PRICE_BY_GOOD`. También cubre el costo de construcción ya acordado para
+Farm/Lumber Camp/Mine/Quarry/Steel Mill/Trade Depot/Port (capacidad/radio/desbloqueo en 0 para
+estos — no son fuentes de cobertura de `UtilitySystem`).
+
+### Capacidad real (población servida vs. generada)
+`UtilitySystem` deja de ser solo "¿está en rango?": cada tier flood-fill con su propio radio
+(`floodFillFromSources` ganó un parámetro de radio, antes usaba una constante compartida), y
+además de eso calcula, por ciudad, `capacidad instalada / demanda` (población + empleos, misma
+fórmula que `GovernmentFinanceSystem` ya usa para impuestos) como un ratio en `[0,1]`
+(`powerCoverageRatio`/`waterCoverageRatio`). `PopulationSystem` multiplica el crecimiento por esos
+ratios además del `growthRateMultiplier` de `Difficulty` — una ciudad que superó la capacidad de
+su única planta chica crece más lento aunque el tile siga técnicamente "en rango". Esto evita una
+reescritura completa a un sistema de carga/flujo real (spec §20: entendible, no hiperrealista) —
+un solo scan extra por ciudad, no una simulación de red eléctrica.
+
+`satisfactionPercent` no cambió en esta fase — el techo por tier de prosperidad/lujo queda para
+Fase 2, cuando existan edificios de prosperidad/lujo contra los que probarlo.
+
+### Fuera de alcance de esta fase (documentado, no implementado)
+- **Fase 2**: Hospital, Bomberos, Basura+Incineradora, Cementerio, Parques, Museo — cada uno
+  reusando exactamente esta misma maquinaria (`BuildingEconomics`, capacidad/desbloqueo por
+  población, `UtilitySystem`), más el techo de satisfacción por tier de prosperidad/lujo y el
+  ingreso de Museo (turismo). Esta fase sí necesitará ampliar `Chunk.serviceFlags` de `byte[]` a
+  `int[]` (bump de formato de `ChunkDeltaIO`) porque agrega bits de servicio nuevos — Electricidad
+  y Agua no lo necesitaron porque ya tenían sus bits desde Fase 2.
+- Ayuntamiento, Banco Central, Policía/Educación/Iglesias — no confirmados para ninguna fase.
+- Densidad evolutiva estilo TheOtown (edificios que crecen de casas chicas a rascacielos con
+  variantes aleatorias, mencionado por el usuario como inspiración) — idea distinta, sin relación
+  directa con el sistema de tiers de servicio; anotada como posible fase futura.
+
+### Persistencia
+Sin cambios de formato en esta fase — `BuildingEconomics` es una tabla estática (no se persiste),
+y `Chunk.serviceFlags` sigue siendo `byte[]` porque Electricidad/Agua ya usaban sus bits desde
+antes.
+
+---
+
 ## MVP 0.6 — Regional Passenger Transport
 
 ### Qué pide el spec

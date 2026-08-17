@@ -93,4 +93,11 @@ class BuildPortCommandTest {
             store, buildings, new CityRegistry(), graph, null, ports, 4096, 0);
         assertEquals(CommandResult.REJECTED_NO_CITY_FOUNDED, new BuildPortCommand(5, 5).apply(noCityCtx));
     }
+
+    @Test
+    void portRejectsWithoutEnoughFunds() {
+        int cityId = cities.nearestCity(5, 5);
+        cities.finance(cityId).adjustTreasury(-cities.finance(cityId).treasuryBalance());
+        assertEquals(CommandResult.REJECTED_INSUFFICIENT_FUNDS, new BuildPortCommand(5, 5).apply(ctx()));
+    }
 }

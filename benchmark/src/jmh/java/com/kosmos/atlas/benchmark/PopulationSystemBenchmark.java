@@ -1,6 +1,7 @@
 package com.kosmos.atlas.benchmark;
 
 import com.kosmos.atlas.sim.population.PopulationSystem;
+import com.kosmos.atlas.sim.utility.UtilitySystem;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -28,16 +29,19 @@ public class PopulationSystemBenchmark {
 
     private BenchmarkCityFixture city;
     private PopulationSystem populationSystem;
+    private UtilitySystem utilitySystem;
 
     @Setup(Level.Trial)
     public void setup() {
         city = new BenchmarkCityFixture(5, 8);
         city.settle(30); // run to steady state before measuring
         populationSystem = new PopulationSystem();
+        utilitySystem = new UtilitySystem();
+        utilitySystem.update(city.store, city.buildings, city.cities);
     }
 
     @Benchmark
     public void tick() {
-        populationSystem.tick(city.store, city.buildings, city.cities);
+        populationSystem.tick(city.store, city.buildings, city.cities, utilitySystem);
     }
 }

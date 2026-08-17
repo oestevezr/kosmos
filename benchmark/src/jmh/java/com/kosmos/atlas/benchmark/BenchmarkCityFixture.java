@@ -86,8 +86,8 @@ final class BenchmarkCityFixture {
         PopulationSystem populationSystem = new PopulationSystem();
         for (int i = 0; i < iterations; i++) {
             roadNetwork.update(store);
-            utilitySystem.update(store, buildings);
-            populationSystem.tick(store, buildings, cities);
+            utilitySystem.update(store, buildings, cities);
+            populationSystem.tick(store, buildings, cities, utilitySystem);
         }
     }
 }

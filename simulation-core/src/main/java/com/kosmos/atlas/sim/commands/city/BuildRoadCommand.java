@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.commands.city;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.commands.Command;
 import com.kosmos.atlas.sim.commands.CommandDecoder;
 import com.kosmos.atlas.sim.commands.CommandResult;
@@ -17,6 +18,9 @@ import java.io.IOException;
  * grow a building (spec §9: population only appears once access/shelter/water/employment exist).
  */
 public final class BuildRoadCommand extends Command {
+
+    /** Flat cost per tile — roads are physical construction, unlike zoning (spec's cost system). */
+    public static final double COST_PER_TILE = 50.0;
 
     private final int tileX;
     private final int tileY;
@@ -52,6 +56,17 @@ public final class BuildRoadCommand extends Command {
         if (chunk.roadType[idx] != WorldConstants.ROAD_NONE) {
             return CommandResult.REJECTED_TILE_OCCUPIED;
         }
+
+        CityRegistry cities = ctx.requireCities();
+        int cityId = cities.nearestCity(tileX, tileY);
+        if (cityId < 0) {
+            return CommandResult.REJECTED_NO_CITY_FOUNDED;
+        }
+        if (cities.finance(cityId).treasuryBalance() < COST_PER_TILE) {
+            return CommandResult.REJECTED_INSUFFICIENT_FUNDS;
+        }
+        cities.finance(cityId).adjustTreasury(-COST_PER_TILE);
+
         chunk.roadType[idx] = WorldConstants.ROAD_DIRT;
         chunk.markDirty();
         return CommandResult.ACCEPTED;

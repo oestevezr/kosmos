@@ -4,7 +4,9 @@ import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.commands.Command;
 import com.kosmos.atlas.sim.commands.CommandResult;
 import com.kosmos.atlas.sim.commands.SimulationContext;
+import com.kosmos.atlas.sim.economy.BuildingEconomics;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
+import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.WorldConstants;
 
@@ -56,11 +58,39 @@ abstract class AbstractPlaceUtilityBuildingCommand extends Command {
         }
 
         BuildingRegistry buildings = ctx.requireBuildings();
+        long unlockPopulation = BuildingEconomics.unlockPopulation(buildingType());
+        if (unlockPopulation > 0 && residentialPopulationOf(buildings, cityId) < unlockPopulation) {
+            return CommandResult.REJECTED_SERVICE_TIER_LOCKED;
+        }
+        double cost = BuildingEconomics.constructionCost(buildingType());
+        if (cities.finance(cityId).treasuryBalance() < cost) {
+            return CommandResult.REJECTED_INSUFFICIENT_FUNDS;
+        }
+
+        cities.finance(cityId).adjustTreasury(-cost);
         int id = buildings.create(buildingType(), tileX, tileY, cityId);
         chunk.buildingId[idx] = id;
         chunk.zoneType[idx] = WorldConstants.ZONE_NONE; // infrastructure is never a zoned lot
         chunk.markDirty();
         return CommandResult.ACCEPTED;
+    }
+
+    /**
+     * Sums population across every active RESIDENTIAL building owned by {@code cityId} — the
+     * "has this city grown enough to unlock the next tier" check (spec's tiered-service system).
+     * A plain O(buildings) scan, not a hot-loop concern — this only runs when a player submits a
+     * tier-gated construction command, the same performance class as
+     * {@code GovernmentFinanceSystem}'s per-tick per-city scan.
+     */
+    private static long residentialPopulationOf(BuildingRegistry buildings, int cityId) {
+        long total = 0;
+        int highWaterMark = buildings.highWaterMark();
+        for (int id = 1; id < highWaterMark; id++) {
+            if (buildings.isActive(id) && buildings.cityId(id) == cityId && buildings.type(id) == BuildingType.RESIDENTIAL) {
+                total += buildings.population(id);
+            }
+        }
+        return total;
     }
 
     @Override

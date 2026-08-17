@@ -1,5 +1,6 @@
 package com.kosmos.atlas.sim.commands.city;
 
+import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.commands.Command;
 import com.kosmos.atlas.sim.commands.CommandDecoder;
 import com.kosmos.atlas.sim.commands.CommandResult;
@@ -19,6 +20,12 @@ import java.io.IOException;
  * population growth an emergent consequence of infrastructure, not a direct command effect.
  */
 public final class ZoneCommand extends Command {
+
+    /** Cost of delimiting a new zone — the "infrastructure to let building happen" cost (spec's
+     *  cost system); un-zoning ({@link WorldConstants#ZONE_NONE}) is free. Indexed by zone type. */
+    public static final double RESIDENTIAL_COST = 150.0;
+    public static final double COMMERCIAL_COST = 200.0;
+    public static final double INDUSTRIAL_COST = 200.0;
 
     private final int tileX;
     private final int tileY;
@@ -56,9 +63,32 @@ public final class ZoneCommand extends Command {
         if (chunk.buildingId[idx] != WorldConstants.NO_BUILDING) {
             return CommandResult.REJECTED_TILE_OCCUPIED; // re-zoning an occupied tile requires demolishing first
         }
+
+        CityRegistry cities = ctx.requireCities();
+        int cityId = cities.nearestCity(tileX, tileY);
+        if (cityId < 0) {
+            return CommandResult.REJECTED_NO_CITY_FOUNDED;
+        }
+        double cost = costFor(zoneType);
+        if (cost > 0) {
+            if (cities.finance(cityId).treasuryBalance() < cost) {
+                return CommandResult.REJECTED_INSUFFICIENT_FUNDS;
+            }
+            cities.finance(cityId).adjustTreasury(-cost);
+        }
+
         chunk.zoneType[idx] = zoneType;
         chunk.markDirty();
         return CommandResult.ACCEPTED;
+    }
+
+    private static double costFor(byte zoneType) {
+        return switch (zoneType) {
+            case WorldConstants.ZONE_RESIDENTIAL -> RESIDENTIAL_COST;
+            case WorldConstants.ZONE_COMMERCIAL -> COMMERCIAL_COST;
+            case WorldConstants.ZONE_INDUSTRIAL -> INDUSTRIAL_COST;
+            default -> 0.0; // ZONE_NONE (un-zoning) is free
+        };
     }
 
     @Override

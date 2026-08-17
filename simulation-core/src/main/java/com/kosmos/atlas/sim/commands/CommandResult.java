@@ -25,5 +25,9 @@ public enum CommandResult {
     /** A city cannot lend to itself. */
     REJECTED_SAME_CITY_LOAN,
     /** The referenced loan id doesn't exist or has already been repaid in full. */
-    REJECTED_LOAN_NOT_FOUND
+    REJECTED_LOAN_NOT_FOUND,
+    /** The owning city's treasury can't cover this construction/zoning's cost. */
+    REJECTED_INSUFFICIENT_FUNDS,
+    /** This building's tier requires more city population than the city currently has (spec's tiered-service system). */
+    REJECTED_SERVICE_TIER_LOCKED
 }

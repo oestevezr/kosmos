@@ -1,6 +1,7 @@
 package com.kosmos.atlas.sim.population;
 
 import com.kosmos.atlas.sim.city.CityRegistry;
+import com.kosmos.atlas.sim.utility.UtilitySystem;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
 import com.kosmos.atlas.sim.world.WorldConstants;
@@ -63,10 +64,10 @@ public final class PopulationSystem {
         return cityId < totalIndustrialJobsByCity.length ? totalIndustrialJobsByCity[cityId] : 0;
     }
 
-    public void tick(ChunkStore store, BuildingRegistry buildings, CityRegistry cities) {
+    public void tick(ChunkStore store, BuildingRegistry buildings, CityRegistry cities, UtilitySystem utility) {
         ensureCapacity(cities.highWaterMark());
         recomputeCityTotals(buildings);
-        growExistingBuildings(store, buildings, cities.difficulty().growthRateMultiplier);
+        growExistingBuildings(store, buildings, cities, utility);
         settleEmptyZonedTiles(store, buildings, cities);
         recomputeCityTotals(buildings); // reflect any spawns from this same tick in the public totals
     }
@@ -105,7 +106,7 @@ public final class PopulationSystem {
         }
     }
 
-    private void growExistingBuildings(ChunkStore store, BuildingRegistry buildings, double growthRateMultiplier) {
+    private void growExistingBuildings(ChunkStore store, BuildingRegistry buildings, CityRegistry cities, UtilitySystem utility) {
         buildings.forEachActive(id -> {
             byte type = buildings.type(id);
             if (type != BuildingType.RESIDENTIAL && type != BuildingType.COMMERCIAL && type != BuildingType.INDUSTRIAL) {
@@ -119,6 +120,10 @@ public final class PopulationSystem {
             buildings.setSatisfactionPercent(id, buildings.satisfactionPercent(id) + SATISFACTION_RECOVERY_STEP);
 
             int cityId = buildings.cityId(id);
+            // Being in flood-fill range isn't enough — the city's installed capacity must also
+            // cover its demand (spec's tiered-service capacity model, see UtilitySystem's javadoc).
+            double growthRateMultiplier = cities.difficulty().growthRateMultiplier
+                * utility.powerCoverageRatio(cityId) * utility.waterCoverageRatio(cityId);
             if (type == BuildingType.RESIDENTIAL) {
                 growResidential(buildings, id, cityId, growthRateMultiplier);
             } else {

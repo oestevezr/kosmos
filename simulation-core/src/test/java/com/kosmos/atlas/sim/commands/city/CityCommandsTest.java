@@ -124,4 +124,60 @@ class CityCommandsTest {
     void commandsOnUnknownChunkAreRejected() {
         assertEquals(CommandResult.REJECTED_UNKNOWN_CHUNK, new BuildRoadCommand(500, 500).apply(ctx()));
     }
+
+    @Test
+    void buildRoadRejectsWithoutAFoundedCityNearby() {
+        SimulationContext noCityCtx = new SimulationContext(store, buildings, new CityRegistry(), 4096, 0);
+        assertEquals(CommandResult.REJECTED_NO_CITY_FOUNDED, new BuildRoadCommand(5, 5).apply(noCityCtx));
+    }
+
+    @Test
+    void buildRoadRejectsWithoutEnoughFundsAndSpendsOnSuccess() {
+        cities.finance(cityId).adjustTreasury(-cities.finance(cityId).treasuryBalance()); // zero it out
+        assertEquals(CommandResult.REJECTED_INSUFFICIENT_FUNDS, new BuildRoadCommand(5, 5).apply(ctx()));
+
+        cities.finance(cityId).adjustTreasury(BuildRoadCommand.COST_PER_TILE);
+        assertEquals(CommandResult.ACCEPTED, new BuildRoadCommand(5, 5).apply(ctx()));
+        assertEquals(0.0, cities.finance(cityId).treasuryBalance(), 1e-9);
+    }
+
+    @Test
+    void zoningResidentialSpendsItsCostButUnzoningIsFree() {
+        double before = cities.finance(cityId).treasuryBalance();
+        assertEquals(CommandResult.ACCEPTED, new ZoneCommand(5, 5, WorldConstants.ZONE_RESIDENTIAL).apply(ctx()));
+        assertEquals(before - ZoneCommand.RESIDENTIAL_COST, cities.finance(cityId).treasuryBalance(), 1e-9);
+
+        double afterZoning = cities.finance(cityId).treasuryBalance();
+        assertEquals(CommandResult.ACCEPTED, new ZoneCommand(5, 5, WorldConstants.ZONE_NONE).apply(ctx()));
+        assertEquals(afterZoning, cities.finance(cityId).treasuryBalance(), 1e-9, "un-zoning must be free");
+    }
+
+    @Test
+    void zoningRejectsWithoutEnoughFunds() {
+        cities.finance(cityId).adjustTreasury(-cities.finance(cityId).treasuryBalance());
+        assertEquals(CommandResult.REJECTED_INSUFFICIENT_FUNDS,
+            new ZoneCommand(5, 5, WorldConstants.ZONE_COMMERCIAL).apply(ctx()));
+    }
+
+    @Test
+    void tieredUtilityBuildingsRejectBeforePopulationUnlocksThemAndAcceptAfter() {
+        assertEquals(CommandResult.REJECTED_SERVICE_TIER_LOCKED, new BuildHydroelectricPlantCommand(5, 5).apply(ctx()));
+        assertEquals(CommandResult.REJECTED_SERVICE_TIER_LOCKED, new BuildWaterTreatmentPlantCommand(5, 5).apply(ctx()));
+        assertEquals(CommandResult.REJECTED_SERVICE_TIER_LOCKED, new BuildNuclearPlantCommand(5, 5).apply(ctx()));
+        assertEquals(CommandResult.REJECTED_SERVICE_TIER_LOCKED, new BuildDesalinationPlantCommand(5, 5).apply(ctx()));
+
+        int home = buildings.create(BuildingType.RESIDENTIAL, 20, 20, cityId);
+        buildings.setPopulation(home, 500);
+        assertEquals(CommandResult.ACCEPTED, new BuildHydroelectricPlantCommand(5, 5).apply(ctx()));
+        assertEquals(CommandResult.ACCEPTED, new BuildWaterTreatmentPlantCommand(6, 5).apply(ctx()));
+    }
+
+    @Test
+    void tieredUtilityBuildingRejectsWithoutEnoughFundsEvenIfUnlocked() {
+        int home = buildings.create(BuildingType.RESIDENTIAL, 20, 20, cityId);
+        buildings.setPopulation(home, 2000); // unlocks every tier
+        cities.finance(cityId).adjustTreasury(-cities.finance(cityId).treasuryBalance());
+
+        assertEquals(CommandResult.REJECTED_INSUFFICIENT_FUNDS, new BuildNuclearPlantCommand(5, 5).apply(ctx()));
+    }
 }

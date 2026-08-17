@@ -27,6 +27,22 @@ public final class BuildingType {
     /** Higher-capacity coastal trade gateway — see {@code com.kosmos.atlas.sim.trade.PortRegistry} for its extra fields. */
     public static final byte PORT = 11;
 
+    // --- Tiered utility services (TheOtown-inspired: unlock bigger/costlier tiers as the city
+    // grows, see docs/roadmap.md's "Servicios cívicos por tiers" section). POWER_PLANT/WATER_TOWER
+    // above are tier 1 of their category; economics (cost/maintenance/capacity/radius/unlock
+    // population) for every tier live in com.kosmos.atlas.sim.economy.BuildingEconomics, not here.
+    /** Electricity tier 2 — unlocked once the city is populous enough (see BuildingEconomics). */
+    public static final byte POWER_PLANT_HYDRO = 12;
+    /** Electricity tier 3. */
+    public static final byte POWER_PLANT_NUCLEAR = 13;
+    /** Water tier 2. */
+    public static final byte WATER_TREATMENT_PLANT = 14;
+    /** Water tier 3. */
+    public static final byte DESALINATION_PLANT = 15;
+
+    /** One past the highest constant above — sizes BuildingEconomics's per-type tables. */
+    public static final int COUNT = 16;
+
     private BuildingType() {
     }
 }

@@ -2,6 +2,7 @@ package com.kosmos.atlas.sim.population;
 
 import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.economy.GovernmentFinanceSystem;
+import com.kosmos.atlas.sim.utility.UtilitySystem;
 import com.kosmos.atlas.sim.world.ChunkStore;
 import org.junit.jupiter.api.Test;
 
@@ -32,8 +33,9 @@ class PopulationAndFinanceAllocationTest {
         BuildingRegistry buildings = seedBuildings(cities);
         ChunkStore emptyStore = new ChunkStore(1); // no loaded chunks: isolates the totals/growth accounting cost
         PopulationSystem system = new PopulationSystem();
+        UtilitySystem utility = new UtilitySystem();
 
-        measureAndAssert("PopulationSystem.tick", () -> system.tick(emptyStore, buildings, cities));
+        measureAndAssert("PopulationSystem.tick", () -> system.tick(emptyStore, buildings, cities, utility));
     }
 
     @Test

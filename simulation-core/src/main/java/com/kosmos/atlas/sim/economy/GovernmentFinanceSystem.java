@@ -11,6 +11,10 @@ import com.kosmos.atlas.sim.population.BuildingType;
  * Stateless itself — all authoritative state lives in {@link GovernmentFinance}, consistent with
  * commands being the only thing allowed to change tax *policy* while this system only changes the
  * *balance* it funds (spec §38's separation of concerns extends to systems, not just commands).
+ *
+ * <p>The same per-city scan also deducts every active building's
+ * {@link BuildingEconomics#maintenancePerAccrual} — recurring upkeep, charged on the same cadence
+ * as tax collection (spec's cost system: construction is one-time, maintenance is ongoing).
  */
 public final class GovernmentFinanceSystem {
 
@@ -28,18 +32,24 @@ public final class GovernmentFinanceSystem {
         long residentialPop = 0;
         long commercialJobs = 0;
         long industrialJobs = 0;
+        double maintenance = 0;
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
             if (!buildings.isActive(id) || buildings.cityId(id) != cityId) {
                 continue;
             }
-            switch (buildings.type(id)) {
+            byte type = buildings.type(id);
+            switch (type) {
                 case BuildingType.RESIDENTIAL -> residentialPop += buildings.population(id);
                 case BuildingType.COMMERCIAL -> commercialJobs += buildings.jobs(id);
                 case BuildingType.INDUSTRIAL -> industrialJobs += buildings.jobs(id);
                 default -> { /* utility/production buildings pay no tax */ }
             }
+            maintenance += BuildingEconomics.maintenancePerAccrual(type);
         }
         cities.finance(cityId).collectRevenue(residentialPop, commercialJobs, industrialJobs);
+        if (maintenance > 0) {
+            cities.finance(cityId).adjustTreasury(-maintenance);
+        }
     }
 }

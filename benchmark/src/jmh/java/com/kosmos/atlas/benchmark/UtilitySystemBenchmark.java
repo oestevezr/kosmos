@@ -34,11 +34,11 @@ public class UtilitySystemBenchmark {
     public void setup() {
         city = new BenchmarkCityFixture(5, 8);
         utilitySystem = new UtilitySystem();
-        utilitySystem.update(city.store, city.buildings); // let LongQueue/LongIntHashMap grow once, outside measurement
+        utilitySystem.update(city.store, city.buildings, city.cities); // let LongQueue/LongIntHashMap grow once, outside measurement
     }
 
     @Benchmark
     public void update() {
-        utilitySystem.update(city.store, city.buildings);
+        utilitySystem.update(city.store, city.buildings, city.cities);
     }
 }

@@ -93,9 +93,9 @@ public final class WorldManager implements AutoCloseable {
         scheduler.register("road-network", ROAD_NETWORK_CADENCE_TICKS, tick ->
             roadNetwork.update(chunkManager.store()));
         scheduler.register("utilities", UTILITY_CADENCE_TICKS, tick ->
-            utilitySystem.update(chunkManager.store(), buildings));
+            utilitySystem.update(chunkManager.store(), buildings, cities));
         scheduler.register("population", POPULATION_CADENCE_TICKS, tick ->
-            populationSystem.tick(chunkManager.store(), buildings, cities));
+            populationSystem.tick(chunkManager.store(), buildings, cities, utilitySystem));
         scheduler.register("government-finance", FINANCE_CADENCE_TICKS, tick ->
             financeSystem.tick(buildings, cities));
         scheduler.register("market", MARKET_CADENCE_TICKS, tick ->

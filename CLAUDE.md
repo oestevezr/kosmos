@@ -73,6 +73,19 @@ el código fuente.
   `headless-runner` expone `--difficulty`. Persistencia: `cities.dat` gana la dificultad en su
   cabecera (`CityRegistryIO.FORMAT_VERSION` 2). "Oportunidades" (eventos aleatorios) quedó
   deliberadamente fuera de alcance — no existe ningún sistema de eventos en el proyecto.
+- **Servicios cívicos por tiers — Fase 1 (Electricidad + Agua)**: completa (pedido explícito del
+  usuario, fuera de la secuencia MVP del spec, ver `docs/roadmap.md`). Todo comando de
+  construcción ahora cuesta dinero: `BuildingEconomics` (nuevo, `sim.economy`) es la tabla estática
+  por `BuildingType` con costo/mantenimiento/capacidad/radio/población-de-desbloqueo. Electricidad
+  y Agua ganaron 3 tiers cada una (`POWER_PLANT`→`POWER_PLANT_HYDRO`→`POWER_PLANT_NUCLEAR`,
+  `WATER_TOWER`→`WATER_TREATMENT_PLANT`→`DESALINATION_PLANT`), desbloqueados por población de la
+  ciudad. `BuildRoadCommand`/`ZoneCommand` ahora exigen ciudad fundada + cobran costo (RCI se paga
+  al zonificar, no cuando el edificio nace solo). `UtilitySystem` calcula capacidad real (población
+  servida vs. generada) por ciudad, expuesta como `powerCoverageRatio`/`waterCoverageRatio`;
+  `PopulationSystem` multiplica el crecimiento por esos ratios. Nuevos `CommandResult`:
+  `REJECTED_INSUFFICIENT_FUNDS`, `REJECTED_SERVICE_TIER_LOCKED`. Fase 2 (Hospital/Bomberos/
+  Basura/Cementerio/Parques/Museo) queda documentada pero sin implementar — reusará esta misma
+  maquinaria.
 - **MVP 0.6 (Regional Passenger Transport) en adelante**: solo planificado (`docs/roadmap.md`),
   sin código.
 
@@ -88,10 +101,11 @@ simulation-core/   Java puro. CERO dependencias de libGDX/LWJGL/Android — regl
   sim/population/   BuildingRegistry (agregados por edificio, incluye campos de producción de
                     Fase 3 y cityId del dueño), PopulationSystem (totales por ciudad)
   sim/transport/    RoadNetwork (acceso local por adyacencia — NO es el grafo regional)
-  sim/utility/      UtilitySystem (flood-fill de electricidad/agua)
+  sim/utility/      UtilitySystem (flood-fill por tier + capacidad real de electricidad/agua)
   sim/city/         CityRegistry (una GovernmentFinance/GoodsLedger por ciudad fundada, spec §9)
   sim/economy/      GovernmentFinance/System, GoodType, GoodsLedger, MarketSystem,
-                    LoanRegistry/LoanSystem/LoanLenderType (sistema de préstamos)
+                    LoanRegistry/LoanSystem/LoanLenderType (sistema de préstamos),
+                    BuildingEconomics (costo/mantenimiento/capacidad/radio/desbloqueo por tipo)
   sim/trade/        RegionalGraph (nodos/aristas — adelantado desde MVP 0.4, ver docs/roadmap.md),
                     ShipmentRegistry/System (envíos del TradeDepot/Port, sin streaming visual
                     todavía), PortRegistry (fila secundaria por buildingId de tipo PORT)
