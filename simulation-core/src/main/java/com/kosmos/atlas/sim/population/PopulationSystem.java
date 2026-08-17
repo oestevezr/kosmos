@@ -1,6 +1,8 @@
 package com.kosmos.atlas.sim.population;
 
 import com.kosmos.atlas.sim.city.CityRegistry;
+import com.kosmos.atlas.sim.economy.GoodType;
+import com.kosmos.atlas.sim.economy.GoodsLedger;
 import com.kosmos.atlas.sim.utility.UtilitySystem;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
@@ -38,6 +40,20 @@ public final class PopulationSystem {
     public static final int JOB_CAPACITY = 40;
     private static final int SEED_POPULATION = 6;
     private static final int SEED_JOBS = 6;
+
+    // Migration (spec §29 "migration pressure", §16's Passenger Model precursor — MVP 0.6's first
+    // slice, docs/roadmap.md): a newly-settling residential tile's seed population scales with how
+    // attractive its city currently is, instead of always seeding a flat SEED_POPULATION. Two
+    // independent signals, deliberately not an off-map "external city" entity (spec §29: "should be
+    // simulated statistically rather than represented as physical off-map cities") —
+    // jobSurplusRatio (local: "Industry affects jobs, jobs affect migration") and tradeActivityRatio
+    // (external: the city's own MarketSystem export volume, standing in for "the outside world
+    // wants what this city produces"). Only residential seeding scales — commercial/industrial jobs
+    // keep the flat SEED_JOBS, since migrants are residents, not employers.
+    private static final double MIGRATION_BASE_MULTIPLIER = 0.5;
+    private static final double MIGRATION_JOB_SURPLUS_WEIGHT = 1.0;
+    private static final double MIGRATION_TRADE_ACTIVITY_WEIGHT = 1.0;
+    private static final double MIGRATION_TRADE_REFERENCE_VOLUME = 50.0;
     private static final int GROWTH_STEP = 4;
     private static final int SATISFACTION_RECOVERY_STEP = 5;
     private static final int SATISFACTION_DECAY_STEP = 8;
@@ -241,6 +257,28 @@ public final class PopulationSystem {
         }
     }
 
+    /**
+     * How attractive {@code cityId} currently is to new migrants, as a multiplier on
+     * {@link #SEED_POPULATION} — see this class's migration fields javadoc for the rationale.
+     * Ranges {@code [MIGRATION_BASE_MULTIPLIER, MIGRATION_BASE_MULTIPLIER + JOB_SURPLUS_WEIGHT +
+     * TRADE_ACTIVITY_WEIGHT]} = {@code [0.5, 2.5]} with the current weights.
+     */
+    private double migrationMultiplier(CityRegistry cities, int cityId) {
+        long totalJobs = totalCommercialJobs(cityId) + totalIndustrialJobs(cityId);
+        double jobSurplusRatio = clamp01(
+            (totalJobs - totalResidentialPopulation(cityId)) / (double) Math.max(1, totalJobs));
+
+        GoodsLedger ledger = cities.ledger(cityId);
+        int totalExported = 0;
+        for (byte good = 0; good < GoodType.COUNT; good++) {
+            totalExported += ledger.exportedLastTick(good);
+        }
+        double tradeActivityRatio = clamp01(totalExported / MIGRATION_TRADE_REFERENCE_VOLUME);
+
+        return MIGRATION_BASE_MULTIPLIER + jobSurplusRatio * MIGRATION_JOB_SURPLUS_WEIGHT
+            + tradeActivityRatio * MIGRATION_TRADE_ACTIVITY_WEIGHT;
+    }
+
     private void settleEmptyZonedTiles(ChunkStore store, BuildingRegistry buildings, CityRegistry cities) {
         store.forEach(chunk -> {
             int baseX = chunk.chunkX() * WorldConstants.CHUNK_SIZE;
@@ -263,7 +301,8 @@ public final class PopulationSystem {
                     }
                     int id = buildings.create(zoneToBuildingType(chunk.zoneType[idx]), worldTileX, worldTileY, cityId);
                     if (chunk.zoneType[idx] == WorldConstants.ZONE_RESIDENTIAL) {
-                        buildings.setPopulation(id, SEED_POPULATION);
+                        int seed = Math.max(1, (int) Math.round(SEED_POPULATION * migrationMultiplier(cities, cityId)));
+                        buildings.setPopulation(id, seed);
                     } else {
                         buildings.setJobs(id, SEED_JOBS);
                     }

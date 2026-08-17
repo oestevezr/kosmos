@@ -415,4 +415,83 @@ class PopulationSystemTest {
         assertTrue(buildings.population(homeId) <= populationBeforeDemolition,
             "a demotion must never leave more occupants than the new, smaller capacity allows");
     }
+
+    @Test
+    void aCityWithAJobSurplusSeedsMoreMigrantsThanOneWithNone() {
+        int seedWithJobSurplus = residentialSeedPopulationGiven(true, false);
+        int seedWithNoSignals = residentialSeedPopulationGiven(false, false);
+
+        assertTrue(seedWithJobSurplus > seedWithNoSignals,
+            "a city with more jobs than residents should attract a bigger first wave of migrants");
+    }
+
+    @Test
+    void aCityWithTradeActivitySeedsMoreMigrantsThanOneWithNone() {
+        int seedWithTradeActivity = residentialSeedPopulationGiven(false, true);
+        int seedWithNoSignals = residentialSeedPopulationGiven(false, false);
+
+        assertTrue(seedWithTradeActivity > seedWithNoSignals,
+            "a city that exports goods (MarketSystem's external-attraction signal) should attract more migrants");
+    }
+
+    @Test
+    void commercialAndIndustrialSeedJobsAreUnaffectedByMigrationSignals() {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(9, 5)] = WorldConstants.ZONE_COMMERCIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+        // Strong migration signals — must not change how jobs are seeded, only residential population.
+        cities.ledger(1).setInventory(com.kosmos.atlas.sim.economy.GoodType.FOOD, 200);
+        cities.ledger(1).exportGood(com.kosmos.atlas.sim.economy.GoodType.FOOD, 100);
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        refreshServices(store, buildings, cities, utility);
+        system.tick(store, buildings, cities, utility);
+
+        int shopId = chunk.buildingId[Chunk.tileIndex(9, 5)];
+        assertTrue(shopId != WorldConstants.NO_BUILDING);
+        assertEquals(6, buildings.jobs(shopId), "commercial/industrial seeding stays flat regardless of migration signals");
+    }
+
+    /**
+     * Founds a city, optionally pre-loads a job surplus (commercial/industrial jobs with no
+     * residents yet) and/or trade activity (an exported-goods signal on the ledger), then settles
+     * exactly one residential tile and returns its seeded population.
+     */
+    private int residentialSeedPopulationGiven(boolean withJobSurplus, boolean withTradeActivity) {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+        if (withJobSurplus) {
+            int shop = buildings.create(BuildingType.COMMERCIAL, 10, 22, 1);
+            buildings.setJobs(shop, 40);
+        }
+        if (withTradeActivity) {
+            cities.ledger(1).setInventory(com.kosmos.atlas.sim.economy.GoodType.FOOD, 200);
+            cities.ledger(1).exportGood(com.kosmos.atlas.sim.economy.GoodType.FOOD, 100);
+        }
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        refreshServices(store, buildings, cities, utility);
+        system.tick(store, buildings, cities, utility);
+
+        int homeId = chunk.buildingId[Chunk.tileIndex(11, 5)];
+        assertTrue(homeId != WorldConstants.NO_BUILDING, "the residential tile must have settled this tick");
+        return buildings.population(homeId);
+    }
 }

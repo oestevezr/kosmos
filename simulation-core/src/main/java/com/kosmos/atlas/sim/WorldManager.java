@@ -12,6 +12,7 @@ import com.kosmos.atlas.sim.economy.LoanSystem;
 import com.kosmos.atlas.sim.economy.MarketSystem;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.PopulationSystem;
+import com.kosmos.atlas.sim.trade.AirportRegistry;
 import com.kosmos.atlas.sim.trade.PortRegistry;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
@@ -67,6 +68,7 @@ public final class WorldManager implements AutoCloseable {
     private final ShipmentRegistry shipments = new ShipmentRegistry();
     private final LoanRegistry loans = new LoanRegistry();
     private final PortRegistry ports = new PortRegistry();
+    private final AirportRegistry airports = new AirportRegistry();
     private final RoadNetwork roadNetwork = new RoadNetwork();
     private final UtilitySystem utilitySystem = new UtilitySystem();
     private final PopulationSystem populationSystem = new PopulationSystem();
@@ -99,7 +101,7 @@ public final class WorldManager implements AutoCloseable {
         scheduler.register("government-finance", FINANCE_CADENCE_TICKS, tick ->
             financeSystem.tick(buildings, cities));
         scheduler.register("market", MARKET_CADENCE_TICKS, tick ->
-            marketSystem.tick(buildings, cities, regionalGraph, shipments, ports, tick));
+            marketSystem.tick(buildings, cities, regionalGraph, shipments, ports, airports, tick));
         scheduler.register("shipments", SHIPMENT_CADENCE_TICKS, tick ->
             shipmentSystem.tick(tick, shipments, cities));
         scheduler.register("loans", LOAN_CADENCE_TICKS, tick ->
@@ -158,6 +160,10 @@ public final class WorldManager implements AutoCloseable {
         return ports;
     }
 
+    public AirportRegistry airports() {
+        return airports;
+    }
+
     public void enableJournal(CommandJournal journal) {
         this.journal = journal;
     }
@@ -195,7 +201,8 @@ public final class WorldManager implements AutoCloseable {
         Command command;
         while ((command = commandBus.poll()) != null) {
             SimulationContext ctx = new SimulationContext(
-                chunkManager.store(), buildings, cities, regionalGraph, loans, ports, genSettings.worldSizeTiles, scheduler.currentTick());
+                chunkManager.store(), buildings, cities, regionalGraph, loans, ports, airports,
+                genSettings.worldSizeTiles, scheduler.currentTick());
             CommandResult result = command.apply(ctx);
             if (result == CommandResult.ACCEPTED) {
                 metrics.onCommandAccepted();

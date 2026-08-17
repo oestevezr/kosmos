@@ -82,9 +82,14 @@ public final class BuildingType {
     /** Auto-placed by {@code FoundCityCommand} at the founding tile — never built via
      *  {@code BuildCivicBuildingCommand} directly. Not a coverage source. */
     public static final byte CITY_HALL = 31;
+    /** MVP 0.6's first slice (Regional Passenger Transport) — a cargo-only gateway this pass, same
+     *  role as {@link #PORT} but landlocked and population-gated (spec §19: "a small town should
+     *  not automatically support an international airport"). Passenger capacity is deliberately
+     *  not modeled yet — see {@code docs/roadmap.md}. */
+    public static final byte AIRPORT = 32;
 
     /** One past the highest constant above — sizes BuildingEconomics's per-type tables. */
-    public static final int COUNT = 32;
+    public static final int COUNT = 33;
 
     private BuildingType() {
     }

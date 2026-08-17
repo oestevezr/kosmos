@@ -655,26 +655,75 @@ ameritó una pasada de optimización. Cifra registrada en `docs/architecture.md`
 
 ---
 
-## MVP 0.6 — Regional Passenger Transport
+## MVP 0.6 — Regional Passenger Transport — 🟡 Parcial (Migración + Aeropuerto completos; rail/autobuses/turismo pendientes)
 
 ### Qué pide el spec
 Rail intercity, autobuses, migración, turismo, prototipo de aeropuerto (§16, §19).
 
-### Ajuste
-Pasajeros reutilizan el mismo `RegionalGraph` de 0.3/0.4 con un segundo tipo de flujo (demanda de
-pasajeros en vez de mercancía) sobre las mismas aristas — spec §16 ya lo describe como matrices de
-viajes entre zonas, estructuralmente paralelo a los bienes de 0.3. Evitar la tentación de construir
-un grafo de pasajeros aparte del de flete; son el mismo grafo con dos tipos de demanda.
+### Ajuste de alcance (decidido con el usuario)
+El MVP completo son varios sistemas nuevos a la vez (grafo de pasajeros, flujo real sobre aristas,
+turismo). Se acotó esta pasada a **Migración + Aeropuerto** — los dos con patrón ya probado en el
+código — y se dejó **rail intercity, autobuses y turismo** para una pasada aparte, porque requieren
+el primer uso real de las aristas de `RegionalGraph` (`addEdge` nunca se llamó hasta ahora) y un
+sistema de flujo de pasajeros nuevo que merece su propio diseño.
 
-Migración: extiende `PopulationSystem` — la tasa de asentamiento ya no depende solo de
-condiciones locales (carretera+luz+agua, Fase 2) sino también de la atracción del `MarketSystem`
-externo (demanda de migración de spec §29). Esto es un ajuste de fórmula dentro de
-`PopulationSystem.tick`, no un sistema nuevo.
+### Migración — ✅ Completo: ajuste de fórmula en `PopulationSystem`, sin sistema nuevo
+`PopulationSystem.settleEmptyZonedTiles` sembraba cada tile residencial con una población fija
+(`SEED_POPULATION = 6`) en cuanto cumplía las condiciones locales (calle+luz+agua). Ahora la escala
+un `migrationMultiplier(cities, cityId)` con dos señales independientes, en rango `[0.5, 2.5]`:
 
-Aeropuerto: mismo patrón que puerto (0.5) — nodo especializado en el grafo, gateway al mercado
-externo con capacidad propia, reemplaza gradualmente al `TradeDepot` de 0.3 en vez de competir con
-él (una ciudad pequeña no soporta un aeropuerto internacional — spec §19 — así que el `TradeDepot`
-sigue siendo válido para ciudades que nunca justifican uno).
+- **`jobSurplusRatio`** (local, spec: "Industry affects jobs, jobs affect migration"): reutiliza
+  los totales que `recomputeCityTotals` ya calcula cada tick, sin scan nuevo —
+  `(totalJobs - totalResidentialPopulation) / totalJobs`, recortado a `[0,1]`.
+- **`tradeActivityRatio`** (externa, spec §29 "migration pressure" / "should be simulated
+  statistically rather than represented as physical off-map cities"): lee
+  `GoodsLedger.exportedLastTick(good)` sumado sobre los 8 bienes — la "atracción del `MarketSystem`
+  externo" prometida en el ajuste original, sin inventar ninguna entidad de mundo externo nueva.
+
+Solo la siembra residencial se escala — comercial/industrial siguen con `SEED_JOBS` fijo (los
+empleos no son migrantes). Sin nuevo parámetro en `PopulationSystem.tick`, sin campo persistido
+nuevo, sin cola/presupuesto compartido entre tiles (cada una calcula su propio multiplicador de
+forma independiente, evitando el problema de determinismo por orden de iteración que tendría un
+budget compartido).
+
+**Efecto real medido**: en el escenario `--bench city` (sin empleos al arranque), la población a
+Year 100 bajó de 22 a 16 — es el comportamiento nuevo esperado (la siembra inicial ahora es más
+chica sin superávit de empleos ni exportaciones), no una regresión.
+
+### Aeropuerto — ✅ Completo: mismo patrón que `Port` (0.5), solo gateway de carga por ahora
+`BuildingType.AIRPORT` (id 32, `COUNT` 32→33). En esta pasada es **solo un gateway de carga** —
+pasajeros/turismo/migración por aire quedan fuera hasta la fase de flujo de pasajeros, igual que
+`PortRegistry.passenger_capacity` ya quedó deliberadamente diferida en 0.5 (no se agrega una
+columna sin lector).
+
+- `AirportRegistry` (nuevo, `sim.trade`) — mismo molde que `PortRegistry`: `gates`/
+  `cargoCapacityPerTick`/`customsEfficiencyPercent`, indexado por `buildingId`. Sin columna de
+  pasajeros.
+- `BuildAirportCommand` — calca `BuildPortCommand` con dos diferencias: **sin chequeo de costa**
+  (un aeropuerto no necesita agua adyacente) y **gate de población** (`unlockPopulation = 3000`,
+  más alto que Banco Central — spec §19: "a small town should not automatically support an
+  international airport"), mismo patrón de tier-lock que `BuildCivicBuildingCommand`. Costo 15000
+  (más caro que Puerto).
+- `MarketSystem.runGateways` gana una tercera rama junto a `TRADE_DEPOT`/`PORT`, leyendo
+  concurrencia/capacidad/bonus de aduana de `AirportRegistry` en vez de las constantes planas.
+- **Bug fix necesario, no oportunista**: `DemolishCommand.removeMatchingGraphNode` solo borraba
+  nodos `EXTERNAL_MARKET` — demoler un Puerto ya dejaba su nodo huérfano en `RegionalGraph` desde
+  0.5. Con Aeropuerto como tercer tipo de gateway, se corrigió mapeando el tipo de edificio al tipo
+  de nodo correspondiente (`TRADE_DEPOT→EXTERNAL_MARKET`, `PORT→PORT`, `AIRPORT→AIRPORT`).
+- Persistencia: `airports.dat` (nuevo), mismo molde atómico que `ports.dat`. Ningún formato
+  existente cambió de versión.
+
+### Fuera de alcance de esta pasada
+- Pasajeros de verdad (aristas de `RegionalGraph`, matrices de viaje spec §16, autobuses, rail
+  intercity) — necesitan `addEdge`/`travel_time`/`congestion`/`reliability`, hoy inexistentes en la
+  práctica (`addEdge` nunca se llama).
+- `AirportRegistry`/`PortRegistry` `passengerCapacity` — sin lector todavía.
+- Turismo como ingreso de ciudad — el Museo ya genera ingreso propio (Fase 2 cívica); un puntaje de
+  turismo a nivel ciudad se diseña junto con pasajeros.
+- Requisito de "regional accessibility" del aeropuerto (spec §19) — simplificado a solo población,
+  mismo criterio que ya se usó para Banco Central (solo tesorería).
+- `MarketSystem.updateTransportCosts` sigue sin considerar nodos `PORT`/`AIRPORT` — gap preexistente
+  de 0.5, no introducido por este cambio.
 
 ---
 

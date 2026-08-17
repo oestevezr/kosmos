@@ -3,6 +3,7 @@ package com.kosmos.atlas.sim.persistence;
 import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.economy.LoanRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
+import com.kosmos.atlas.sim.trade.AirportRegistry;
 import com.kosmos.atlas.sim.trade.PortRegistry;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
@@ -73,6 +74,13 @@ public final class SaveManager {
     /** As above, also writing {@code ports.dat} (Port berths/cargo-capacity/customs-efficiency) if {@code ports} is non-null. */
     public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings,
                       CityRegistry cities, ShipmentRegistry shipments, LoanRegistry loans, PortRegistry ports) throws IOException {
+        save(worldName, meta, chunkStore, buildings, cities, shipments, loans, ports, null);
+    }
+
+    /** As above, also writing {@code airports.dat} (Airport gates/cargo-capacity/customs-efficiency, MVP 0.6) if {@code airports} is non-null. */
+    public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings,
+                      CityRegistry cities, ShipmentRegistry shipments, LoanRegistry loans, PortRegistry ports,
+                      AirportRegistry airports) throws IOException {
         Path worldDir = resolveWorldDir(worldName);
         meta.writeTo(worldDir.resolve("world.meta"));
 
@@ -109,6 +117,9 @@ public final class SaveManager {
         }
         if (ports != null) {
             PortRegistryIO.write(worldDir.resolve("ports.dat"), ports);
+        }
+        if (airports != null) {
+            AirportRegistryIO.write(worldDir.resolve("airports.dat"), airports);
         }
     }
 
@@ -155,6 +166,14 @@ public final class SaveManager {
 
     public PortRegistry loadPorts(String worldName) throws IOException {
         return PortRegistryIO.read(resolveWorldDir(worldName).resolve("ports.dat"));
+    }
+
+    public boolean hasAirports(String worldName) throws IOException {
+        return Files.isRegularFile(resolveWorldDir(worldName).resolve("airports.dat"));
+    }
+
+    public AirportRegistry loadAirports(String worldName) throws IOException {
+        return AirportRegistryIO.read(resolveWorldDir(worldName).resolve("airports.dat"));
     }
 
     /** Lists every persisted chunk-delta coordinate for a world, without loading their content yet. */

@@ -3,6 +3,7 @@ package com.kosmos.atlas.sim.economy;
 import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
+import com.kosmos.atlas.sim.trade.AirportRegistry;
 import com.kosmos.atlas.sim.trade.NodeType;
 import com.kosmos.atlas.sim.trade.PortRegistry;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
@@ -56,17 +57,17 @@ public final class MarketSystem {
     private static final double CONSTRUCTION_MATERIALS_PER_INDUSTRIAL_JOB = 0.03;
 
     public void tick(BuildingRegistry buildings, CityRegistry cities, RegionalGraph graph,
-                      ShipmentRegistry shipments, PortRegistry ports, long currentTick) {
-        cities.forEachActive(cityId -> tickOneCity(buildings, cities, cityId, graph, shipments, ports, currentTick));
+                      ShipmentRegistry shipments, PortRegistry ports, AirportRegistry airports, long currentTick) {
+        cities.forEachActive(cityId -> tickOneCity(buildings, cities, cityId, graph, shipments, ports, airports, currentTick));
     }
 
-    private void tickOneCity(BuildingRegistry buildings, CityRegistry cities, int cityId,
-                              RegionalGraph graph, ShipmentRegistry shipments, PortRegistry ports, long currentTick) {
+    private void tickOneCity(BuildingRegistry buildings, CityRegistry cities, int cityId, RegionalGraph graph,
+                              ShipmentRegistry shipments, PortRegistry ports, AirportRegistry airports, long currentTick) {
         GoodsLedger ledger = cities.ledger(cityId);
         ledger.beginTick();
         runProduction(buildings, cityId, ledger);
         runConsumption(buildings, cityId, ledger);
-        runGateways(buildings, cityId, ledger, cities.finance(cityId), shipments, ports, currentTick);
+        runGateways(buildings, cityId, ledger, cities.finance(cityId), shipments, ports, airports, currentTick);
         updateTransportCosts(buildings, cityId, ledger, graph);
         ledger.repriceAll();
     }
@@ -120,24 +121,28 @@ public final class MarketSystem {
         }
     }
 
-    /** Trade Depot and Port buildings both trade through this loop — a Port simply carries its own
-     *  per-tick capacity/concurrency cap/customs bonus via {@link PortRegistry} instead of the flat
-     *  Trade Depot constants (spec §17's higher-capacity coastal gateway). */
+    /** Trade Depot, Port and Airport buildings all trade through this loop — a Port or Airport
+     *  simply carries its own per-tick capacity/concurrency cap/customs bonus via its own registry
+     *  instead of the flat Trade Depot constants (spec §17's higher-capacity coastal gateway; §19's
+     *  landlocked, population-gated one). */
     private void runGateways(BuildingRegistry buildings, int cityId, GoodsLedger ledger, GovernmentFinance finance,
-                              ShipmentRegistry shipments, PortRegistry ports, long currentTick) {
+                              ShipmentRegistry shipments, PortRegistry ports, AirportRegistry airports, long currentTick) {
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
             if (!buildings.isActive(id) || buildings.cityId(id) != cityId) {
                 continue;
             }
             byte type = buildings.type(id);
-            if (type != BuildingType.TRADE_DEPOT && type != BuildingType.PORT) {
+            if (type != BuildingType.TRADE_DEPOT && type != BuildingType.PORT && type != BuildingType.AIRPORT) {
                 continue;
             }
             boolean isPort = type == BuildingType.PORT && ports != null && ports.hasPort(id);
-            int concurrentCap = isPort ? ports.berths(id) : MAX_CONCURRENT_SHIPMENTS_PER_DEPOT;
-            int capacityPerTick = isPort ? ports.cargoCapacityPerTick(id) : TRADE_DEPOT_CAPACITY_PER_TICK;
-            double customsBonus = isPort ? (ports.customsEfficiencyPercent(id) / 100.0) * PORT_CUSTOMS_MAX_BONUS : 0.0;
+            boolean isAirport = type == BuildingType.AIRPORT && airports != null && airports.hasAirport(id);
+            int concurrentCap = isPort ? ports.berths(id) : isAirport ? airports.gates(id) : MAX_CONCURRENT_SHIPMENTS_PER_DEPOT;
+            int capacityPerTick = isPort ? ports.cargoCapacityPerTick(id)
+                : isAirport ? airports.cargoCapacityPerTick(id) : TRADE_DEPOT_CAPACITY_PER_TICK;
+            double customsBonus = isPort ? (ports.customsEfficiencyPercent(id) / 100.0) * PORT_CUSTOMS_MAX_BONUS
+                : isAirport ? (airports.customsEfficiencyPercent(id) / 100.0) * PORT_CUSTOMS_MAX_BONUS : 0.0;
 
             if (shipments.countActiveForDepot(id) >= concurrentCap) {
                 continue; // gateway is at capacity this tick — every good it needs to trade waits

@@ -247,6 +247,11 @@ real del cliente desktop y una re-ejecución del escenario `--bench city` del he
    sube a **103.5 µs/op** (de ~43 µs/op) — el costo real de `updateDensityLevel` evaluándose por
    cada edificio activo cada tick; sigue muy por debajo del presupuesto de sub-sistema (spec §41),
    no ameritó una pasada de optimización.
+
+   **Actualización tras migración (MVP 0.6 parcial)**: `PopulationSystem.tick` da **104.96 µs/op**
+   — sin cambio perceptible frente a la cifra de densidad evolutiva; `migrationMultiplier` es un
+   loop de 8 iteraciones (`GoodType.COUNT`) que solo corre por cada tile que se asienta, no por cada
+   edificio activo cada tick, así que su costo queda dentro del ruido de medición.
 3. **`WorldRenderer` ahora usa un `Mesh` estático por chunk** (`ChunkMesh`, nuevo) en vez de 1024
    llamadas a `SpriteBatch.draw` reenviadas cada frame — la caché de render de spec §44.3 tal cual
    está descrita, no solo posiciones de pantalla cacheadas en CPU. El vértice/UV se sube a la GPU

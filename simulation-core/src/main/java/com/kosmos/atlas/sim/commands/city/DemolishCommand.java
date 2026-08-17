@@ -58,8 +58,9 @@ public final class DemolishCommand extends Command {
         if (existingBuilding != WorldConstants.NO_BUILDING) {
             BuildingRegistry buildings = ctx.requireBuildings();
             if (buildings.isActive(existingBuilding)) {
-                if (buildings.type(existingBuilding) == BuildingType.TRADE_DEPOT) {
-                    removeMatchingGraphNode(ctx);
+                byte nodeType = graphNodeTypeFor(buildings.type(existingBuilding));
+                if (nodeType >= 0) {
+                    removeMatchingGraphNode(ctx, nodeType);
                 }
                 buildings.demolish(existingBuilding);
             }
@@ -72,17 +73,33 @@ public final class DemolishCommand extends Command {
     }
 
     /**
-     * A demolished {@code TradeDepot} must also stop being an external-market gateway in the
-     * {@link RegionalGraph} — the graph has no back-reference from building id to node id, so this
-     * looks the node up by the exact tile the depot stood on (positions always match: the node was
-     * created at this same tile by {@code BuildProductionBuildingCommand}).
+     * Maps a gateway {@code BuildingType} to the {@link NodeType} it registered in
+     * {@link RegionalGraph} when built, or {@code -1} for building types that never add a node.
+     * Previously this only handled {@code TRADE_DEPOT} — demolishing a Port left its graph node
+     * orphaned ever since MVP 0.5 introduced it. Fixed here rather than left as a second latent gap
+     * once Airport became the third gateway type to register a node.
      */
-    private void removeMatchingGraphNode(SimulationContext ctx) {
+    private static byte graphNodeTypeFor(byte buildingType) {
+        return switch (buildingType) {
+            case BuildingType.TRADE_DEPOT -> NodeType.EXTERNAL_MARKET;
+            case BuildingType.PORT -> NodeType.PORT;
+            case BuildingType.AIRPORT -> NodeType.AIRPORT;
+            default -> -1;
+        };
+    }
+
+    /**
+     * A demolished gateway building must also stop being a trade node in the {@link RegionalGraph}
+     * — the graph has no back-reference from building id to node id, so this looks the node up by
+     * the exact tile the building stood on (positions always match: the node was created at this
+     * same tile by the command that built it).
+     */
+    private void removeMatchingGraphNode(SimulationContext ctx, byte nodeType) {
         RegionalGraph graph = ctx.regionalGraph();
         if (graph == null) {
             return;
         }
-        int nodeId = graph.nearestNodeOfType(tileX, tileY, NodeType.EXTERNAL_MARKET);
+        int nodeId = graph.nearestNodeOfType(tileX, tileY, nodeType);
         if (nodeId >= 0 && graph.nodeTileX(nodeId) == tileX && graph.nodeTileY(nodeId) == tileY) {
             graph.removeNode(nodeId);
         }

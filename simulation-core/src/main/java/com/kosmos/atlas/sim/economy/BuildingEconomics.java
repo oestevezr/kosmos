@@ -84,6 +84,12 @@ public final class BuildingEconomics {
         // Still has upkeep, and is not a coverage source either.
         set(BuildingType.CITY_HALL, 0, 5, 0, 0, 0);
 
+        // Airport (MVP 0.6, first slice): costs more than a Port (bigger infrastructure), no
+        // CAPACITY/COVERAGE_RADIUS (not a UtilitySystem coverage source — MarketSystem reads its
+        // own AirportRegistry row instead), gated behind a higher population than Central Bank
+        // (spec §19's "a small town should not automatically support an international airport").
+        set(BuildingType.AIRPORT, 15000, 60, 0, 0, 3000);
+
         // --- MVP 0.3 production chain + Trade Depot/Port: one-time construction cost only,
         // no capacity/radius/unlock (they aren't UtilitySystem coverage sources). ---
         setCostOnly(BuildingType.FARM, 600);

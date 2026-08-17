@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Validates every Fase 2 city command's accept/reject rules (spec §38). */
 class CityCommandsTest {
@@ -104,6 +105,39 @@ class CityCommandsTest {
     @Test
     void demolishOnEmptyTileRejected() {
         assertEquals(CommandResult.REJECTED_NOTHING_TO_DEMOLISH, new DemolishCommand(20, 20).apply(ctx()));
+    }
+
+    @Test
+    void demolishingAPortRemovesItsGraphNode() {
+        com.kosmos.atlas.sim.trade.RegionalGraph graph = new com.kosmos.atlas.sim.trade.RegionalGraph();
+        com.kosmos.atlas.sim.trade.PortRegistry ports = new com.kosmos.atlas.sim.trade.PortRegistry();
+        // (6,5) is land with a water neighbor forced below -> coastal, same trick BuildPortCommandTest uses.
+        store.get(0, 0).terrainType[Chunk.tileIndex(7, 5)] = WorldConstants.TERRAIN_DEEP_WATER;
+        SimulationContext portCtx = new SimulationContext(store, buildings, cities, graph, null, ports, 4096, 0);
+
+        assertEquals(CommandResult.ACCEPTED, new com.kosmos.atlas.sim.commands.economy.BuildPortCommand(6, 5).apply(portCtx));
+        assertTrue(graph.nearestNodeOfType(6, 5, com.kosmos.atlas.sim.trade.NodeType.PORT) >= 0);
+
+        assertEquals(CommandResult.ACCEPTED, new DemolishCommand(6, 5).apply(portCtx));
+        assertEquals(-1, graph.nearestNodeOfType(6, 5, com.kosmos.atlas.sim.trade.NodeType.PORT),
+            "demolishing a Port must remove its RegionalGraph node too, not leak it");
+    }
+
+    @Test
+    void demolishingAnAirportRemovesItsGraphNode() {
+        com.kosmos.atlas.sim.trade.RegionalGraph graph = new com.kosmos.atlas.sim.trade.RegionalGraph();
+        com.kosmos.atlas.sim.trade.AirportRegistry airports = new com.kosmos.atlas.sim.trade.AirportRegistry();
+        int home = buildings.create(BuildingType.RESIDENTIAL, 20, 20, cityId);
+        buildings.setPopulation(home, (int) com.kosmos.atlas.sim.economy.BuildingEconomics.unlockPopulation(BuildingType.AIRPORT));
+        SimulationContext airportCtx = new SimulationContext(store, buildings, cities, graph, null, null, airports, 4096, 0);
+
+        assertEquals(CommandResult.ACCEPTED,
+            new com.kosmos.atlas.sim.commands.economy.BuildAirportCommand(6, 5).apply(airportCtx));
+        assertTrue(graph.nearestNodeOfType(6, 5, com.kosmos.atlas.sim.trade.NodeType.AIRPORT) >= 0);
+
+        assertEquals(CommandResult.ACCEPTED, new DemolishCommand(6, 5).apply(airportCtx));
+        assertEquals(-1, graph.nearestNodeOfType(6, 5, com.kosmos.atlas.sim.trade.NodeType.AIRPORT),
+            "demolishing an Airport must remove its RegionalGraph node too, not leak it");
     }
 
     @Test
