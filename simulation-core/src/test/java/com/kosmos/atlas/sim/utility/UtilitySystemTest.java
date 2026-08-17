@@ -172,4 +172,48 @@ class UtilitySystemTest {
         assertFalse((farChunk.serviceFlags[Chunk.tileIndex(26, 0)] & WorldConstants.SERVICE_HEALTHCARE) != 0,
             "coverage must not extend past the service radius");
     }
+
+    @Test
+    void policeCoverageSpreadsFromAPoliceOutpostAndStopsBeyondItsRadius() {
+        ChunkStore store = new ChunkStore(9);
+        for (int cx = -2; cx <= 2; cx++) {
+            Chunk chunk = new Chunk();
+            chunk.reset(cx, 0);
+            java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+            store.put(chunk);
+        }
+        BuildingRegistry buildings = new BuildingRegistry();
+        int outpostId = buildings.create(BuildingType.POLICE_OUTPOST, 0, 0, 1);
+        store.get(0, 0).buildingId[Chunk.tileIndex(0, 0)] = outpostId;
+
+        new UtilitySystem().update(store, buildings, new CityRegistry());
+
+        Chunk sourceChunk = store.get(0, 0);
+        assertTrue((sourceChunk.serviceFlags[Chunk.tileIndex(0, 0)] & WorldConstants.SERVICE_POLICE) != 0,
+            "the source tile itself is covered");
+
+        Chunk farChunk = store.get(2, 0);
+        assertFalse((farChunk.serviceFlags[Chunk.tileIndex(26, 0)] & WorldConstants.SERVICE_POLICE) != 0,
+            "coverage must not extend past the service radius");
+    }
+
+    @Test
+    void centralBankAndCityHallAreNeverCoverageSources() {
+        ChunkStore store = new ChunkStore(4);
+        Chunk chunk = new Chunk();
+        chunk.reset(0, 0);
+        java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+        store.put(chunk);
+
+        BuildingRegistry buildings = new BuildingRegistry();
+        int bankId = buildings.create(BuildingType.CENTRAL_BANK, 5, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = bankId;
+        int cityHallId = buildings.create(BuildingType.CITY_HALL, 6, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(6, 5)] = cityHallId;
+
+        new UtilitySystem().update(store, buildings, new CityRegistry());
+
+        assertEquals(0, chunk.serviceFlags[Chunk.tileIndex(5, 5)], "Central Bank sets no service bit");
+        assertEquals(0, chunk.serviceFlags[Chunk.tileIndex(6, 5)], "City Hall sets no service bit");
+    }
 }

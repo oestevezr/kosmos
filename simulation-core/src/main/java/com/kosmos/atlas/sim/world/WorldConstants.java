@@ -78,4 +78,11 @@ public final class WorldConstants {
     public static final int SERVICE_CEMETERY = 1 << 6;
     public static final int SERVICE_PARK = 1 << 7;
     public static final int SERVICE_MUSEUM = 1 << 8;
+    /** Set when in range of a Police Outpost or Police Station. */
+    public static final int SERVICE_POLICE = 1 << 9;
+    /** Set when in range of a School or University. */
+    public static final int SERVICE_EDUCATION = 1 << 10;
+    /** Set when in range of a Church. */
+    public static final int SERVICE_RELIGION = 1 << 11;
+    // Central Bank and City Hall are not coverage sources — no bit here, see BuildingEconomics.
 }

@@ -97,6 +97,19 @@ el código fuente.
   `CommandResult` de Fase 1, no hizo falta ninguno nuevo. `Chunk.serviceFlags` pasó de `byte[]` a
   `int[]` (9 bits de servicio no caben en un byte) — `ChunkDeltaIO.FORMAT_VERSION` 3, saves viejos
   no cargan.
+- **Ayuntamiento, Banco Central, Policía/Educación/Iglesias**: completa (ver `docs/roadmap.md`).
+  Policía (`POLICE_OUTPOST`→`POLICE_STATION`) y Educación (`SCHOOL`→`UNIVERSITY`) repiten el
+  patrón mecánico exacto de Fase 2; `CHURCH` sin tier 2. `BuildingType.COUNT` 32. **Banco Central**
+  (`CENTRAL_BANK`) no es fuente de cobertura — su único efecto es un gate nuevo en
+  `RequestCityLoanCommand`: la ciudad prestamista necesita uno activo
+  (`BuildingRegistry.hasActiveBuildingOfType`, nuevo `CommandResult.
+  REJECTED_LENDER_HAS_NO_CENTRAL_BANK`). **Ayuntamiento** (`CITY_HALL`) no se compra — se
+  concluyó que era conceptualmente redundante con `FoundCityCommand`, así que ahora ese comando
+  lo coloca gratis en el tile de fundación (y ganó el chequeo de tile ocupado que no tenía);
+  `CITY_HALL` queda excluido de `BuildCivicBuildingCommand` a propósito. Sin bump de formato — los
+  3 bits nuevos ya caben en el `int` de `Chunk.serviceFlags`. **Pendiente sin implementar**:
+  densidad evolutiva estilo TheOtown (casas chicas → rascacielos) — arquitectura distinta, requiere
+  su propio plan.
 - **MVP 0.6 (Regional Passenger Transport) en adelante**: solo planificado (`docs/roadmap.md`),
   sin código.
 

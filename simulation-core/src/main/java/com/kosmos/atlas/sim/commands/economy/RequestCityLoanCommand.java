@@ -8,6 +8,8 @@ import com.kosmos.atlas.sim.commands.SimulationContext;
 import com.kosmos.atlas.sim.economy.GovernmentFinance;
 import com.kosmos.atlas.sim.economy.LoanLenderType;
 import com.kosmos.atlas.sim.economy.LoanRegistry;
+import com.kosmos.atlas.sim.population.BuildingRegistry;
+import com.kosmos.atlas.sim.population.BuildingType;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -25,6 +27,9 @@ import java.io.IOException;
  * {@link com.kosmos.atlas.sim.Difficulty#loanInterestRateMultiplier}, same as
  * {@code RequestExternalLoanCommand}. The prosperity thresholds themselves are deliberately not
  * difficulty-scaled — a Hard world's lower starting treasury already makes reaching them harder.
+ *
+ * <p>The lender must also have built a {@code BuildingType.CENTRAL_BANK} — banking capacity is a
+ * physical prerequisite, not just a balance-sheet one (spec's civic-service system).
  */
 public final class RequestCityLoanCommand extends Command {
 
@@ -73,6 +78,11 @@ public final class RequestCityLoanCommand extends Command {
         }
         if (!(amount > 0.0)) {
             return CommandResult.REJECTED_INVALID_LOAN_AMOUNT;
+        }
+
+        BuildingRegistry buildings = ctx.requireBuildings();
+        if (!buildings.hasActiveBuildingOfType(lenderCityId, BuildingType.CENTRAL_BANK)) {
+            return CommandResult.REJECTED_LENDER_HAS_NO_CENTRAL_BANK;
         }
 
         GovernmentFinance lenderFinance = cities.finance(lenderCityId);

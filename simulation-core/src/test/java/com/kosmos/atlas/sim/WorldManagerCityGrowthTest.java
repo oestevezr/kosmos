@@ -34,21 +34,25 @@ class WorldManagerCityGrowthTest {
             var chunk = world.chunkManager().store().get(0, 0);
             assertTrue(chunk != null, "chunk (0,0) should have streamed in by now");
 
-            // Find a contiguous run of land tiles along y=16 to build the demo settlement on.
-            int landRunStart = findLandRun(chunk.terrainType, 16, 6);
-            assertTrue(landRunStart >= 0, "expected at least 6 contiguous land tiles at y=16 for this seed");
+            // Find a contiguous run of land tiles along y=16 to build the demo settlement on. The
+            // first tile is reserved for FoundCityCommand's auto-placed City Hall (spec's civic
+            // service system) — the road spine starts one tile after it so the City Hall's tile
+            // never conflicts with a road/zone tile.
+            int landRunStart = findLandRun(chunk.terrainType, 16, 7);
+            assertTrue(landRunStart >= 0, "expected at least 7 contiguous land tiles at y=16 for this seed");
 
             assertTrue(world.submitCommand(new FoundCityCommand(landRunStart, 16, "Testville")));
             world.update(1.0 / 30.0); // drain the found-city command so subsequent commands attribute to it
             int cityId = world.cities().nearestCity(landRunStart, 16);
 
-            for (int x = landRunStart; x < landRunStart + 6; x++) {
+            int roadStart = landRunStart + 1;
+            for (int x = roadStart; x < roadStart + 6; x++) {
                 assertTrue(world.submitCommand(new BuildRoadCommand(x, 16)));
             }
-            assertTrue(world.submitCommand(new ZoneCommand(landRunStart, 15, WorldConstants.ZONE_RESIDENTIAL)));
-            assertTrue(world.submitCommand(new ZoneCommand(landRunStart + 1, 17, WorldConstants.ZONE_COMMERCIAL)));
-            assertTrue(world.submitCommand(new BuildPowerPlantCommand(landRunStart + 3, 15)));
-            assertTrue(world.submitCommand(new BuildWaterTowerCommand(landRunStart + 3, 17)));
+            assertTrue(world.submitCommand(new ZoneCommand(roadStart, 15, WorldConstants.ZONE_RESIDENTIAL)));
+            assertTrue(world.submitCommand(new ZoneCommand(roadStart + 1, 17, WorldConstants.ZONE_COMMERCIAL)));
+            assertTrue(world.submitCommand(new BuildPowerPlantCommand(roadStart + 3, 15)));
+            assertTrue(world.submitCommand(new BuildWaterTowerCommand(roadStart + 3, 17)));
 
             // Advance enough simulated time for road/utility/population systems to run several times.
             world.timeManager().setSpeedMultiplier(16);

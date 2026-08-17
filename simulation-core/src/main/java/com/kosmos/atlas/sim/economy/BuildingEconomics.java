@@ -60,6 +60,23 @@ public final class BuildingEconomics {
         setCoverageOnly(BuildingType.MUSEUM, 4500, 12, 20, 1000);
         REVENUE_PER_ACCRUAL[BuildingType.MUSEUM] = 18;
 
+        // --- Remaining civic services: Police and Education follow the same 2-tier prosperity
+        // pattern as Healthcare/Fire/Sanitation; Church has no tier 2, same as Cemetery. ---
+        setCoverageOnly(BuildingType.POLICE_OUTPOST, 1200, 10, 25, 0);
+        setCoverageOnly(BuildingType.POLICE_STATION, 3500, 25, 45, 1000);
+        setCoverageOnly(BuildingType.SCHOOL, 1800, 15, 25, 0);
+        setCoverageOnly(BuildingType.UNIVERSITY, 5500, 30, 45, 1200);
+        setCoverageOnly(BuildingType.CHURCH, 600, 5, 20, 0);
+
+        // Central Bank: not a UtilitySystem coverage source (radius 0, never flood-filled) — its
+        // only effect is gating RequestCityLoanCommand (see BuildingRegistry.hasActiveBuildingOfType).
+        set(BuildingType.CENTRAL_BANK, 8000, 20, 0, 0, 1500);
+
+        // City Hall: never built via BuildCivicBuildingCommand — FoundCityCommand places it for
+        // free at the founding tile, so construction cost is 0 (there's no purchase to charge for).
+        // Still has upkeep, and is not a coverage source either.
+        set(BuildingType.CITY_HALL, 0, 5, 0, 0, 0);
+
         // --- MVP 0.3 production chain + Trade Depot/Port: one-time construction cost only,
         // no capacity/radius/unlock (they aren't UtilitySystem coverage sources). ---
         setCostOnly(BuildingType.FARM, 600);

@@ -105,9 +105,12 @@ public final class HeadlessMain {
             return;
         }
 
-        int landStart = findLandRun(chunk.terrainType, 16, 8);
+        // First tile is reserved for FoundCityCommand's auto-placed City Hall (spec's civic
+        // service system) — the road spine starts one tile after it so the City Hall's tile never
+        // conflicts with a road/zone tile.
+        int landStart = findLandRun(chunk.terrainType, 16, 9);
         if (landStart < 0) {
-            System.err.println("City scenario: no 8-tile land run found at y=16 for this seed; try a different --seed.");
+            System.err.println("City scenario: no 9-tile land run found at y=16 for this seed; try a different --seed.");
             return;
         }
 
@@ -115,17 +118,18 @@ public final class HeadlessMain {
         world.update(1.0 / 30.0); // drain the found-city command so the city exists before zoning/building
         int cityId = world.cities().nearestCity(landStart, 16);
 
-        for (int x = landStart; x < landStart + 8; x++) {
+        int roadStart = landStart + 1;
+        for (int x = roadStart; x < roadStart + 8; x++) {
             world.submitCommand(new BuildRoadCommand(x, 16));
         }
-        world.submitCommand(new ZoneCommand(landStart, 15, WorldConstants.ZONE_RESIDENTIAL));
-        world.submitCommand(new ZoneCommand(landStart + 1, 15, WorldConstants.ZONE_RESIDENTIAL));
-        world.submitCommand(new ZoneCommand(landStart + 2, 17, WorldConstants.ZONE_COMMERCIAL));
-        world.submitCommand(new ZoneCommand(landStart + 3, 17, WorldConstants.ZONE_INDUSTRIAL));
-        world.submitCommand(new BuildPowerPlantCommand(landStart + 5, 15));
-        world.submitCommand(new BuildWaterTowerCommand(landStart + 5, 17));
+        world.submitCommand(new ZoneCommand(roadStart, 15, WorldConstants.ZONE_RESIDENTIAL));
+        world.submitCommand(new ZoneCommand(roadStart + 1, 15, WorldConstants.ZONE_RESIDENTIAL));
+        world.submitCommand(new ZoneCommand(roadStart + 2, 17, WorldConstants.ZONE_COMMERCIAL));
+        world.submitCommand(new ZoneCommand(roadStart + 3, 17, WorldConstants.ZONE_INDUSTRIAL));
+        world.submitCommand(new BuildPowerPlantCommand(roadStart + 5, 15));
+        world.submitCommand(new BuildWaterTowerCommand(roadStart + 5, 17));
 
-        System.out.println("Founded settlement at chunk (0,0), road row y=16, x=[" + landStart + "," + (landStart + 7) + "]");
+        System.out.println("Founded settlement at chunk (0,0), road row y=16, x=[" + roadStart + "," + (roadStart + 7) + "]");
         System.out.println();
 
         long startNanos = System.nanoTime();

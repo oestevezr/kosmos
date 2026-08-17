@@ -215,6 +215,21 @@ public final class BuildingRegistry {
         return total;
     }
 
+    /**
+     * Whether {@code targetCityId} owns at least one active building of {@code targetType} — the
+     * "has this city built the physical prerequisite" check (e.g. a Central Bank before it can
+     * lend, see {@code RequestCityLoanCommand}). Same O(buildings) scan/performance class as
+     * {@link #residentialPopulationOfCity}.
+     */
+    public boolean hasActiveBuildingOfType(int targetCityId, byte targetType) {
+        for (int id = 1; id < highWaterMark; id++) {
+            if (active[id] && cityId[id] == targetCityId && type[id] == targetType) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public byte type(int id) {
         return type[id];
     }

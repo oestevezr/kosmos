@@ -6,6 +6,7 @@ import com.kosmos.atlas.sim.commands.SimulationContext;
 import com.kosmos.atlas.sim.economy.LoanLenderType;
 import com.kosmos.atlas.sim.economy.LoanRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
+import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.world.ChunkStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,9 +38,11 @@ class LoanCommandsTest {
         prosperousLender = cities.create("Richfield", 100, 100, 0);
         zeroTreasury(prosperousLender);
         cities.finance(prosperousLender).adjustTreasury(20_000.0);
+        buildings.create(BuildingType.CENTRAL_BANK, 100, 100, prosperousLender);
         poorLender = cities.create("Poorville", 200, 200, 0);
         zeroTreasury(poorLender);
         cities.finance(poorLender).adjustTreasury(1_000.0);
+        buildings.create(BuildingType.CENTRAL_BANK, 200, 200, poorLender);
     }
 
     private void zeroTreasury(int cityId) {
@@ -89,6 +92,15 @@ class LoanCommandsTest {
         // Prosperous lender has 20,000; borrowing 19,000 would leave only 1,000, below the reserve floor.
         assertEquals(CommandResult.REJECTED_LENDER_NOT_PROSPEROUS,
             new RequestCityLoanCommand(borrower, prosperousLender, 19_000.0).apply(ctx()));
+    }
+
+    @Test
+    void cityLoanRejectedWithoutALenderCentralBankEvenIfProsperous() {
+        int lenderWithoutBank = cities.create("Bankless", 300, 300, 0);
+        cities.finance(lenderWithoutBank).adjustTreasury(50_000.0); // plenty prosperous, just no bank
+
+        assertEquals(CommandResult.REJECTED_LENDER_HAS_NO_CENTRAL_BANK,
+            new RequestCityLoanCommand(borrower, lenderWithoutBank, 500.0).apply(ctx()));
     }
 
     @Test

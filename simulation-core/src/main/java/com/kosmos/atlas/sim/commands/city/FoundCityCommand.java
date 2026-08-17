@@ -5,6 +5,8 @@ import com.kosmos.atlas.sim.commands.Command;
 import com.kosmos.atlas.sim.commands.CommandDecoder;
 import com.kosmos.atlas.sim.commands.CommandResult;
 import com.kosmos.atlas.sim.commands.SimulationContext;
+import com.kosmos.atlas.sim.population.BuildingRegistry;
+import com.kosmos.atlas.sim.population.BuildingType;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.WorldConstants;
 
@@ -20,6 +22,11 @@ import java.io.UTFDataFormatException;
  * {@code PopulationSystem}), so founding the first city is the mandatory opening move, not one
  * option among many (spec §9's "player's first meaningful action is not 'manage a city'; it is:
  * choose where civilization begins").
+ *
+ * <p>Also places a {@code BuildingType.CITY_HALL} at the founding tile, free of charge — City Hall
+ * was conceptually redundant as a player-purchasable building (this command already *is* the
+ * founding act), so it's the physical marker this command leaves behind instead of a separate,
+ * decorative construction command.
  */
 public final class FoundCityCommand extends Command {
 
@@ -58,6 +65,9 @@ public final class FoundCityCommand extends Command {
         if (!TileBuildability.isLand(chunk.terrainType[idx])) {
             return CommandResult.REJECTED_INVALID_TERRAIN;
         }
+        if (chunk.buildingId[idx] != WorldConstants.NO_BUILDING) {
+            return CommandResult.REJECTED_TILE_OCCUPIED;
+        }
 
         CityRegistry cities = ctx.requireCities();
         int nearest = cities.nearestCity(tileX, tileY);
@@ -65,7 +75,16 @@ public final class FoundCityCommand extends Command {
             return CommandResult.REJECTED_TOO_CLOSE_TO_ANOTHER_CITY;
         }
 
-        cities.create(name, tileX, tileY, ctx.currentTick());
+        int newCityId = cities.create(name, tileX, tileY, ctx.currentTick());
+
+        // A founded city gets a City Hall at its founding tile for free — it marks the city on the
+        // map and gives City Hall a real role instead of being purely decorative (spec's civic
+        // service system); never built via BuildCivicBuildingCommand directly (see BuildingType).
+        BuildingRegistry buildings = ctx.requireBuildings();
+        int cityHallId = buildings.create(BuildingType.CITY_HALL, tileX, tileY, newCityId);
+        chunk.buildingId[idx] = cityHallId;
+        chunk.markDirty();
+
         return CommandResult.ACCEPTED;
     }
 

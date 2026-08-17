@@ -68,14 +68,20 @@ public final class UtilitySystem {
     private static final byte[] CEMETERY_SOURCE_TYPES = {BuildingType.CEMETERY};
     private static final byte[] PARK_SOURCE_TYPES = {BuildingType.PARK};
     private static final byte[] MUSEUM_SOURCE_TYPES = {BuildingType.MUSEUM};
+    private static final byte[] POLICE_SOURCE_TYPES = {BuildingType.POLICE_OUTPOST, BuildingType.POLICE_STATION};
+    private static final byte[] EDUCATION_SOURCE_TYPES = {BuildingType.SCHOOL, BuildingType.UNIVERSITY};
+    private static final byte[] RELIGION_SOURCE_TYPES = {BuildingType.CHURCH};
+    // Central Bank and City Hall are deliberately absent — not coverage sources, see BuildingType.
 
     private static final byte[][] COVERAGE_ONLY_SOURCE_TYPES = {
         HEALTHCARE_SOURCE_TYPES, FIRE_SOURCE_TYPES, SANITATION_SOURCE_TYPES,
         CEMETERY_SOURCE_TYPES, PARK_SOURCE_TYPES, MUSEUM_SOURCE_TYPES,
+        POLICE_SOURCE_TYPES, EDUCATION_SOURCE_TYPES, RELIGION_SOURCE_TYPES,
     };
     private static final int[] COVERAGE_ONLY_SERVICE_BITS = {
         WorldConstants.SERVICE_HEALTHCARE, WorldConstants.SERVICE_FIRE, WorldConstants.SERVICE_SANITATION,
         WorldConstants.SERVICE_CEMETERY, WorldConstants.SERVICE_PARK, WorldConstants.SERVICE_MUSEUM,
+        WorldConstants.SERVICE_POLICE, WorldConstants.SERVICE_EDUCATION, WorldConstants.SERVICE_RELIGION,
     };
 
     private final LongQueue frontier = new LongQueue(1024);

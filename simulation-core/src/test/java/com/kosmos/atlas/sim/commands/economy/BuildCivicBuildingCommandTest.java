@@ -83,4 +83,29 @@ class BuildCivicBuildingCommandTest {
         assertEquals(CommandResult.ACCEPTED, new BuildCivicBuildingCommand(5, 5, BuildingType.CLINIC).apply(ctx()));
         assertEquals(CommandResult.REJECTED_TILE_OCCUPIED, new BuildCivicBuildingCommand(5, 5, BuildingType.CEMETERY).apply(ctx()));
     }
+
+    @Test
+    void policeStationRejectedUntilPopulationUnlocksItThenAccepted() {
+        assertEquals(CommandResult.ACCEPTED, new BuildCivicBuildingCommand(5, 5, BuildingType.POLICE_OUTPOST).apply(ctx()));
+        assertEquals(CommandResult.REJECTED_SERVICE_TIER_LOCKED,
+            new BuildCivicBuildingCommand(6, 5, BuildingType.POLICE_STATION).apply(ctx()));
+
+        int home = buildings.create(BuildingType.RESIDENTIAL, 20, 20, cityId);
+        buildings.setPopulation(home, (int) BuildingEconomics.unlockPopulation(BuildingType.POLICE_STATION));
+        assertEquals(CommandResult.ACCEPTED, new BuildCivicBuildingCommand(6, 5, BuildingType.POLICE_STATION).apply(ctx()));
+    }
+
+    @Test
+    void centralBankIsBuildableLikeAnyOtherCivicType() {
+        int home = buildings.create(BuildingType.RESIDENTIAL, 20, 20, cityId);
+        buildings.setPopulation(home, (int) BuildingEconomics.unlockPopulation(BuildingType.CENTRAL_BANK));
+
+        assertEquals(CommandResult.ACCEPTED, new BuildCivicBuildingCommand(5, 5, BuildingType.CENTRAL_BANK).apply(ctx()));
+    }
+
+    @Test
+    void cityHallIsRejectedAsAnUnknownTypeSincePlayersCannotBuildItDirectly() {
+        assertEquals(CommandResult.REJECTED_INVALID_TERRAIN,
+            new BuildCivicBuildingCommand(5, 5, BuildingType.CITY_HALL).apply(ctx()));
+    }
 }

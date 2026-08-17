@@ -98,7 +98,11 @@ public final class BuildCivicBuildingCommand extends Command {
         return type == BuildingType.CLINIC || type == BuildingType.HOSPITAL
             || type == BuildingType.VOLUNTEER_FIRE_BRIGADE || type == BuildingType.FIRE_STATION
             || type == BuildingType.WASTE_COLLECTION || type == BuildingType.INCINERATOR
-            || type == BuildingType.CEMETERY || type == BuildingType.PARK || type == BuildingType.MUSEUM;
+            || type == BuildingType.CEMETERY || type == BuildingType.PARK || type == BuildingType.MUSEUM
+            || type == BuildingType.POLICE_OUTPOST || type == BuildingType.POLICE_STATION
+            || type == BuildingType.SCHOOL || type == BuildingType.UNIVERSITY
+            || type == BuildingType.CHURCH || type == BuildingType.CENTRAL_BANK;
+            // CITY_HALL deliberately excluded — only FoundCityCommand may create it.
     }
 
     @Override

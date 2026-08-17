@@ -64,8 +64,27 @@ public final class BuildingType {
     /** Luxury — the one civic building that generates its own revenue (tourism), see BuildingEconomics. */
     public static final byte MUSEUM = 24;
 
+    // --- Remaining civic services + Central Bank/City Hall (see docs/roadmap.md). Police and
+    // Education follow the same 2-tier prosperity pattern as Healthcare/Fire/Sanitation. ---
+    /** Public safety tier 1. */
+    public static final byte POLICE_OUTPOST = 25;
+    /** Public safety tier 2. */
+    public static final byte POLICE_STATION = 26;
+    /** Education tier 1. */
+    public static final byte SCHOOL = 27;
+    /** Education tier 2. */
+    public static final byte UNIVERSITY = 28;
+    /** No tier 2 — same as Cemetery. */
+    public static final byte CHURCH = 29;
+    /** Not a coverage source (no radius/satisfaction effect) — the physical requirement for
+     *  {@code RequestCityLoanCommand} to let this city act as a lender. */
+    public static final byte CENTRAL_BANK = 30;
+    /** Auto-placed by {@code FoundCityCommand} at the founding tile — never built via
+     *  {@code BuildCivicBuildingCommand} directly. Not a coverage source. */
+    public static final byte CITY_HALL = 31;
+
     /** One past the highest constant above — sizes BuildingEconomics's per-type tables. */
-    public static final int COUNT = 25;
+    public static final int COUNT = 32;
 
     private BuildingType() {
     }

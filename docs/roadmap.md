@@ -490,6 +490,60 @@ viejos quedan no-cargables — mismo criterio ya aplicado a `BuildingRegistryIO`
 
 ---
 
+## Ayuntamiento, Banco Central, Policía/Educación/Iglesias — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+El usuario pidió implementar el resto de lo que había quedado pendiente y sin confirmar tras la
+Fase 2: Ayuntamiento, Banco Central, y Policía/Educación/Iglesias — junto con la densidad evolutiva
+estilo TheOtown, que se separó explícitamente en un plan aparte por no tener enganche arquitectónico
+con `BuildingEconomics`/`UtilitySystem` (queda documentada como pendiente, sin implementar todavía).
+
+### Policía y Educación — repetición mecánica exacta del patrón de Fase 2
+`POLICE_OUTPOST`→`POLICE_STATION` y `SCHOOL`→`UNIVERSITY`, mismo patrón de 2 tiers que Salud/
+Bomberos/Saneamiento (encaja con spec §23: "crime" y "education" listados junto a "healthcare"
+como factores de atractivo). `CHURCH` sin tier 2, igual que Cementerio. Los 3 se suman a
+`PopulationSystem.PROSPERITY_MASK` (techo de satisfacción 85) — cero lógica nueva, solo 3 filas en
+`BuildingEconomics`, 3 bits en `WorldConstants`, 3 categorías más en `UtilitySystem` y
+`BuildCivicBuildingCommand`.
+
+### Banco Central — gate físico para `RequestCityLoanCommand`
+Ya se había discutido como la mecánica natural: hoy cualquier ciudad próspera puede prestarle a
+otra sin construir nada. `BuildingType.CENTRAL_BANK` no es fuente de cobertura (radio 0, no entra
+en `UtilitySystem`) — su único efecto es un nuevo chequeo en `RequestCityLoanCommand` antes de los
+de prosperidad/tesorería: la ciudad prestamista debe tener un Banco Central activo
+(`BuildingRegistry.hasActiveBuildingOfType`, nuevo método público, mismo patrón O(edificios) que
+`residentialPopulationOfCity` de Fase 2). Nuevo `CommandResult.REJECTED_LENDER_HAS_NO_CENTRAL_BANK`.
+
+### Ayuntamiento — auto-colocado por `FoundCityCommand`, no comprable
+Se había concluido que el Ayuntamiento es conceptualmente redundante (`FoundCityCommand` ya "es"
+la fundación de la ciudad). En vez de dejarlo puramente decorativo o inventar un comando aparte,
+`FoundCityCommand` ahora coloca un `BuildingType.CITY_HALL` gratis en el mismo tile de fundación —
+le da un rol real (marca la ciudad en el mapa, tiene mantenimiento) sin duplicar la fundación.
+`CITY_HALL` queda deliberadamente **fuera** de `BuildCivicBuildingCommand.isKnownCivicType` — no
+es comprable directamente. Esto exigió agregarle a `FoundCityCommand` el chequeo de tile ocupado
+que no tenía hasta ahora (`REJECTED_TILE_OCCUPIED`) — antes fundar sobre un tile con un edificio ya
+existente lo pisaría en silencio. No hay regla de "no se puede demoler el Ayuntamiento" — se deja
+demolible como cualquier edificio, ya que `CityRegistry` no depende de que siga existiendo.
+
+**Efecto colateral real**: cualquier escenario que construyera una carretera exactamente en el
+mismo tile donde se fundó la ciudad ahora choca con el Ayuntamiento (`REJECTED_TILE_OCCUPIED`).
+Tanto `HeadlessMain`'s `--bench city` como `WorldManagerCityGrowthTest` fundaban la ciudad en el
+primer tile de su tramo de carretera — se ajustaron para reservar ese tile solo para el Ayuntamiento
+y empezar la carretera un tile después.
+
+### Fuera de alcance de esta fase (documentado, no implementado)
+- **Densidad evolutiva estilo TheOtown** (casas chicas → rascacielos, variantes aleatorias) —
+  arquitectura distinta, sin relación con lo anterior. Queda como el único pendiente real del pedido
+  original del usuario sobre edificios cívicos/densidad.
+- Capacidad/demanda real para Policía/Educación/Iglesia — mismo criterio que Fase 2.
+- Prevenir la demolición del Ayuntamiento — no pedido.
+
+### Persistencia
+Sin bump de formato — los 3 bits de servicio nuevos ya caben en el `int` ensanchado en la Fase 2 de
+servicios cívicos.
+
+---
+
 ## MVP 0.6 — Regional Passenger Transport
 
 ### Qué pide el spec

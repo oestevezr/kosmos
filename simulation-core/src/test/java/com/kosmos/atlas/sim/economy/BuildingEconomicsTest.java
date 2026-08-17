@@ -81,4 +81,35 @@ class BuildingEconomicsTest {
         assertEquals(0, BuildingEconomics.revenuePerAccrual(BuildingType.HOSPITAL));
         assertEquals(0, BuildingEconomics.revenuePerAccrual(BuildingType.CLINIC));
     }
+
+    @Test
+    void policeAndEducationTier2CostMoreCoverFartherAndUnlockLaterThanTier1() {
+        assertTrue(BuildingEconomics.constructionCost(BuildingType.POLICE_STATION)
+            > BuildingEconomics.constructionCost(BuildingType.POLICE_OUTPOST));
+        assertEquals(0, BuildingEconomics.unlockPopulation(BuildingType.POLICE_OUTPOST));
+        assertTrue(BuildingEconomics.unlockPopulation(BuildingType.POLICE_STATION) > 0);
+
+        assertTrue(BuildingEconomics.constructionCost(BuildingType.UNIVERSITY) > BuildingEconomics.constructionCost(BuildingType.SCHOOL));
+        assertEquals(0, BuildingEconomics.unlockPopulation(BuildingType.SCHOOL));
+        assertTrue(BuildingEconomics.unlockPopulation(BuildingType.UNIVERSITY) > 0);
+
+        assertTrue(BuildingEconomics.constructionCost(BuildingType.CHURCH) > 0);
+        assertEquals(0, BuildingEconomics.unlockPopulation(BuildingType.CHURCH), "no tier 2, always available like Cemetery");
+    }
+
+    @Test
+    void centralBankHasNoCoverageButGatesLendingAndCostsMore() {
+        assertEquals(0, BuildingEconomics.capacity(BuildingType.CENTRAL_BANK));
+        assertEquals(0, BuildingEconomics.coverageRadiusTiles(BuildingType.CENTRAL_BANK), "not a UtilitySystem coverage source");
+        assertTrue(BuildingEconomics.unlockPopulation(BuildingType.CENTRAL_BANK) > 0);
+        assertTrue(BuildingEconomics.constructionCost(BuildingType.CENTRAL_BANK) > 0);
+    }
+
+    @Test
+    void cityHallHasNoConstructionCostSinceItsNeverPurchased() {
+        assertEquals(0, BuildingEconomics.constructionCost(BuildingType.CITY_HALL),
+            "FoundCityCommand places it for free — there's no purchase to charge for");
+        assertEquals(0, BuildingEconomics.coverageRadiusTiles(BuildingType.CITY_HALL));
+        assertTrue(BuildingEconomics.maintenancePerAccrual(BuildingType.CITY_HALL) > 0, "still has upkeep");
+    }
 }

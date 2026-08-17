@@ -29,5 +29,7 @@ public enum CommandResult {
     /** The owning city's treasury can't cover this construction/zoning's cost. */
     REJECTED_INSUFFICIENT_FUNDS,
     /** This building's tier requires more city population than the city currently has (spec's tiered-service system). */
-    REJECTED_SERVICE_TIER_LOCKED
+    REJECTED_SERVICE_TIER_LOCKED,
+    /** The lending city hasn't built a Central Bank yet — the physical prerequisite for offering inter-city credit. */
+    REJECTED_LENDER_HAS_NO_CENTRAL_BANK
 }
