@@ -60,6 +60,24 @@ public final class UtilitySystem {
     private static final byte[] WATER_SOURCE_TYPES =
         {BuildingType.WATER_TOWER, BuildingType.WATER_TREATMENT_PLANT, BuildingType.DESALINATION_PLANT};
 
+    // Fase 2 prosperity/luxury coverage sources — bit-only, no capacity/demand ratio (see class
+    // javadoc). Paired with their service bit in COVERAGE_ONLY_CATEGORIES below.
+    private static final byte[] HEALTHCARE_SOURCE_TYPES = {BuildingType.CLINIC, BuildingType.HOSPITAL};
+    private static final byte[] FIRE_SOURCE_TYPES = {BuildingType.VOLUNTEER_FIRE_BRIGADE, BuildingType.FIRE_STATION};
+    private static final byte[] SANITATION_SOURCE_TYPES = {BuildingType.WASTE_COLLECTION, BuildingType.INCINERATOR};
+    private static final byte[] CEMETERY_SOURCE_TYPES = {BuildingType.CEMETERY};
+    private static final byte[] PARK_SOURCE_TYPES = {BuildingType.PARK};
+    private static final byte[] MUSEUM_SOURCE_TYPES = {BuildingType.MUSEUM};
+
+    private static final byte[][] COVERAGE_ONLY_SOURCE_TYPES = {
+        HEALTHCARE_SOURCE_TYPES, FIRE_SOURCE_TYPES, SANITATION_SOURCE_TYPES,
+        CEMETERY_SOURCE_TYPES, PARK_SOURCE_TYPES, MUSEUM_SOURCE_TYPES,
+    };
+    private static final int[] COVERAGE_ONLY_SERVICE_BITS = {
+        WorldConstants.SERVICE_HEALTHCARE, WorldConstants.SERVICE_FIRE, WorldConstants.SERVICE_SANITATION,
+        WorldConstants.SERVICE_CEMETERY, WorldConstants.SERVICE_PARK, WorldConstants.SERVICE_MUSEUM,
+    };
+
     private final LongQueue frontier = new LongQueue(1024);
     private final LongIntHashMap depthOf = new LongIntHashMap(2048, 0.6f);
 
@@ -69,12 +87,22 @@ public final class UtilitySystem {
     private double[] waterCoverageRatioByCity = new double[4];
 
     public void update(ChunkStore store, BuildingRegistry buildings, CityRegistry cities) {
-        clearBits(store, WorldConstants.SERVICE_POWERED | WorldConstants.SERVICE_WATERED);
+        int coverageOnlyBits = 0;
+        for (int bit : COVERAGE_ONLY_SERVICE_BITS) {
+            coverageOnlyBits |= bit;
+        }
+        clearBits(store, WorldConstants.SERVICE_POWERED | WorldConstants.SERVICE_WATERED | coverageOnlyBits);
         for (byte type : POWER_SOURCE_TYPES) {
             floodFillFromSources(store, buildings, type, WorldConstants.SERVICE_POWERED, BuildingEconomics.coverageRadiusTiles(type));
         }
         for (byte type : WATER_SOURCE_TYPES) {
             floodFillFromSources(store, buildings, type, WorldConstants.SERVICE_WATERED, BuildingEconomics.coverageRadiusTiles(type));
+        }
+        for (int category = 0; category < COVERAGE_ONLY_SOURCE_TYPES.length; category++) {
+            int serviceBit = COVERAGE_ONLY_SERVICE_BITS[category];
+            for (byte type : COVERAGE_ONLY_SOURCE_TYPES[category]) {
+                floodFillFromSources(store, buildings, type, serviceBit, BuildingEconomics.coverageRadiusTiles(type));
+            }
         }
 
         ensureCapacity(cities.highWaterMark());
@@ -147,9 +175,9 @@ public final class UtilitySystem {
 
     private void clearBits(ChunkStore store, int bits) {
         store.forEach(chunk -> {
-            byte[] flags = chunk.serviceFlags;
+            int[] flags = chunk.serviceFlags;
             for (int i = 0; i < flags.length; i++) {
-                flags[i] = (byte) ((flags[i] & 0xFF) & ~bits);
+                flags[i] = flags[i] & ~bits;
             }
         });
     }
@@ -184,7 +212,7 @@ public final class UtilitySystem {
             if (!isLand(chunk.terrainType[idx])) {
                 continue; // utilities don't spread across open water in Fase 2
             }
-            chunk.serviceFlags[idx] = (byte) ((chunk.serviceFlags[idx] & 0xFF) | serviceBit);
+            chunk.serviceFlags[idx] = chunk.serviceFlags[idx] | serviceBit;
 
             if (depth >= radiusTiles) {
                 continue;

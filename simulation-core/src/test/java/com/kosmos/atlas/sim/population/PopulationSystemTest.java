@@ -177,4 +177,76 @@ class PopulationSystemTest {
         }
         assertEquals(before, system.totalResidentialPopulation(1), "unserviced buildings must not keep growing");
     }
+
+    @Test
+    void satisfactionRisesToTheProsperityCeilingWhenAClinicIsInRangeButNotWithoutOne() {
+        long satisfactionWithClinic = residentialSatisfactionAfterTicks(true, 10);
+        long satisfactionWithoutClinic = residentialSatisfactionAfterTicks(false, 10);
+
+        assertTrue(satisfactionWithClinic > satisfactionWithoutClinic,
+            "prosperity coverage should raise the satisfaction ceiling above the base 60");
+        assertEquals(60, satisfactionWithoutClinic, "no prosperity/luxury coverage caps satisfaction at the base ceiling");
+    }
+
+    @Test
+    void growsFasterWithProsperityCoverageThanWithoutGivenIdenticalConditionsOtherwise() {
+        long populationWithClinic = residentialPopulationAfterTicksWithOrWithoutClinic(true, 15);
+        long populationWithoutClinic = residentialPopulationAfterTicksWithOrWithoutClinic(false, 15);
+
+        assertTrue(populationWithClinic > populationWithoutClinic,
+            "a higher satisfaction ceiling should translate into faster growth, not just a bigger displayed number");
+    }
+
+    private long residentialSatisfactionAfterTicks(boolean withClinic, int ticks) {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+        if (withClinic) {
+            int clinicId = buildings.create(BuildingType.CLINIC, 10, 22, 1);
+            chunk.buildingId[Chunk.tileIndex(10, 22)] = clinicId;
+        }
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        int homeId = -1;
+        for (int i = 0; i < ticks; i++) {
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
+            homeId = chunk.buildingId[Chunk.tileIndex(11, 5)];
+        }
+        return buildings.satisfactionPercent(homeId);
+    }
+
+    private long residentialPopulationAfterTicksWithOrWithoutClinic(boolean withClinic, int ticks) {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+        chunk.zoneType[Chunk.tileIndex(9, 5)] = WorldConstants.ZONE_COMMERCIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+        if (withClinic) {
+            int clinicId = buildings.create(BuildingType.CLINIC, 10, 22, 1);
+            chunk.buildingId[Chunk.tileIndex(10, 22)] = clinicId;
+        }
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        for (int i = 0; i < ticks; i++) {
+            refreshServices(store, buildings, cities, utility);
+            system.tick(store, buildings, cities, utility);
+        }
+        return system.totalResidentialPopulation(1);
+    }
 }

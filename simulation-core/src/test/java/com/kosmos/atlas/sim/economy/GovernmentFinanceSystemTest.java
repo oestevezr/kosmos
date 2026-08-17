@@ -92,6 +92,22 @@ class GovernmentFinanceSystemTest {
     }
 
     @Test
+    void museumNetsItsRevenueAgainstItsOwnMaintenance() {
+        BuildingRegistry buildings = new BuildingRegistry();
+        CityRegistry cities = new CityRegistry();
+        int cityId = cities.create("Testville", 0, 0, 0);
+        buildings.create(BuildingType.MUSEUM, 0, 0, cityId);
+
+        double before = cities.finance(cityId).treasuryBalance();
+        new GovernmentFinanceSystem().tick(buildings, cities);
+
+        double expectedNet = BuildingEconomics.revenuePerAccrual(BuildingType.MUSEUM)
+            - BuildingEconomics.maintenancePerAccrual(BuildingType.MUSEUM);
+        assertTrue(expectedNet > 0, "the Museum should be net-positive after its own upkeep");
+        assertEquals(expectedNet, cities.finance(cityId).treasuryBalance() - before, 1e-9);
+    }
+
+    @Test
     void taxRateValidatesRangeAndSector() {
         GovernmentFinance finance = new GovernmentFinance();
         assertThrows(IllegalArgumentException.class,

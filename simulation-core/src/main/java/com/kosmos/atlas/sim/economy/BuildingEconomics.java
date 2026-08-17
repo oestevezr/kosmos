@@ -27,6 +27,7 @@ public final class BuildingEconomics {
 
     private static final double[] CONSTRUCTION_COST = new double[BuildingType.COUNT];
     private static final double[] MAINTENANCE_PER_ACCRUAL = new double[BuildingType.COUNT];
+    private static final double[] REVENUE_PER_ACCRUAL = new double[BuildingType.COUNT];
     private static final int[] CAPACITY = new int[BuildingType.COUNT];
     private static final int[] COVERAGE_RADIUS_TILES = new int[BuildingType.COUNT];
     private static final long[] UNLOCK_POPULATION = new long[BuildingType.COUNT];
@@ -41,6 +42,23 @@ public final class BuildingEconomics {
         set(BuildingType.WATER_TOWER, 600, 6, 400, 30, 0);
         set(BuildingType.WATER_TREATMENT_PLANT, 3000, 25, 2000, 48, 500);
         set(BuildingType.DESALINATION_PLANT, 9000, 50, 8000, 60, 2000);
+
+        // --- Fase 2: prosperity/luxury civic services (spec §23's attractiveness factors,
+        // finally wired up — see PopulationSystem's satisfaction-ceiling logic). No CAPACITY: a
+        // hospital doesn't "serve" a population count the way a power plant does — coverage alone
+        // feeds the satisfaction ceiling, not a capacity/demand ratio. ---
+        setCoverageOnly(BuildingType.CLINIC, 2000, 15, 25, 0);
+        setCoverageOnly(BuildingType.HOSPITAL, 6000, 35, 45, 1000);
+        setCoverageOnly(BuildingType.VOLUNTEER_FIRE_BRIGADE, 1200, 10, 25, 0);
+        setCoverageOnly(BuildingType.FIRE_STATION, 3500, 25, 45, 1000);
+        setCoverageOnly(BuildingType.WASTE_COLLECTION, 1000, 8, 25, 0);
+        setCoverageOnly(BuildingType.INCINERATOR, 3000, 20, 45, 800);
+        setCoverageOnly(BuildingType.CEMETERY, 800, 4, 20, 0);
+        setCoverageOnly(BuildingType.PARK, 400, 3, 15, 200);
+        // Museum is the one civic building with its own revenue (tourism) — net +6/accrual after
+        // its own upkeep, confirmed with the user during Fase 1's scoping questions.
+        setCoverageOnly(BuildingType.MUSEUM, 4500, 12, 20, 1000);
+        REVENUE_PER_ACCRUAL[BuildingType.MUSEUM] = 18;
 
         // --- MVP 0.3 production chain + Trade Depot/Port: one-time construction cost only,
         // no capacity/radius/unlock (they aren't UtilitySystem coverage sources). ---
@@ -63,6 +81,10 @@ public final class BuildingEconomics {
         return MAINTENANCE_PER_ACCRUAL[buildingType];
     }
 
+    public static double revenuePerAccrual(byte buildingType) {
+        return REVENUE_PER_ACCRUAL[buildingType];
+    }
+
     public static int capacity(byte buildingType) {
         return CAPACITY[buildingType];
     }
@@ -80,6 +102,15 @@ public final class BuildingEconomics {
         CONSTRUCTION_COST[type] = constructionCost;
         MAINTENANCE_PER_ACCRUAL[type] = maintenancePerAccrual;
         CAPACITY[type] = capacity;
+        COVERAGE_RADIUS_TILES[type] = coverageRadiusTiles;
+        UNLOCK_POPULATION[type] = unlockPopulation;
+    }
+
+    /** Coverage-only service (prosperity/luxury civic buildings): no CAPACITY, see the class javadoc. */
+    private static void setCoverageOnly(byte type, double constructionCost, double maintenancePerAccrual,
+                                         int coverageRadiusTiles, long unlockPopulation) {
+        CONSTRUCTION_COST[type] = constructionCost;
+        MAINTENANCE_PER_ACCRUAL[type] = maintenancePerAccrual;
         COVERAGE_RADIUS_TILES[type] = coverageRadiusTiles;
         UNLOCK_POPULATION[type] = unlockPopulation;
     }

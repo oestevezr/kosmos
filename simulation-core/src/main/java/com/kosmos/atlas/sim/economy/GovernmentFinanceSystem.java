@@ -12,9 +12,11 @@ import com.kosmos.atlas.sim.population.BuildingType;
  * commands being the only thing allowed to change tax *policy* while this system only changes the
  * *balance* it funds (spec §38's separation of concerns extends to systems, not just commands).
  *
- * <p>The same per-city scan also deducts every active building's
- * {@link BuildingEconomics#maintenancePerAccrual} — recurring upkeep, charged on the same cadence
- * as tax collection (spec's cost system: construction is one-time, maintenance is ongoing).
+ * <p>The same per-city scan also nets every active building's
+ * {@link BuildingEconomics#maintenancePerAccrual} (recurring upkeep) against
+ * {@link BuildingEconomics#revenuePerAccrual} (currently only the Museum's tourism income) —
+ * charged/collected on the same cadence as tax collection (spec's cost system: construction is
+ * one-time, maintenance/revenue are ongoing).
  */
 public final class GovernmentFinanceSystem {
 
@@ -33,6 +35,7 @@ public final class GovernmentFinanceSystem {
         long commercialJobs = 0;
         long industrialJobs = 0;
         double maintenance = 0;
+        double civicRevenue = 0;
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
             if (!buildings.isActive(id) || buildings.cityId(id) != cityId) {
@@ -46,10 +49,12 @@ public final class GovernmentFinanceSystem {
                 default -> { /* utility/production buildings pay no tax */ }
             }
             maintenance += BuildingEconomics.maintenancePerAccrual(type);
+            civicRevenue += BuildingEconomics.revenuePerAccrual(type);
         }
         cities.finance(cityId).collectRevenue(residentialPop, commercialJobs, industrialJobs);
-        if (maintenance > 0) {
-            cities.finance(cityId).adjustTreasury(-maintenance);
+        double net = civicRevenue - maintenance;
+        if (net != 0) {
+            cities.finance(cityId).adjustTreasury(net);
         }
     }
 }

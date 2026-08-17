@@ -147,4 +147,29 @@ class UtilitySystemTest {
         assertEquals(1.0, system.powerCoverageRatio(cityId), 1e-9, "no demand yet means nothing to throttle");
         assertEquals(1.0, system.waterCoverageRatio(cityId), 1e-9);
     }
+
+    @Test
+    void healthcareCoverageSpreadsFromAClinicAndStopsBeyondItsRadius() {
+        ChunkStore store = new ChunkStore(9);
+        for (int cx = -2; cx <= 2; cx++) {
+            Chunk chunk = new Chunk();
+            chunk.reset(cx, 0);
+            java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+            store.put(chunk);
+        }
+        BuildingRegistry buildings = new BuildingRegistry();
+        int clinicId = buildings.create(BuildingType.CLINIC, 0, 0, 1);
+        store.get(0, 0).buildingId[Chunk.tileIndex(0, 0)] = clinicId;
+
+        new UtilitySystem().update(store, buildings, new CityRegistry());
+
+        Chunk sourceChunk = store.get(0, 0);
+        assertTrue((sourceChunk.serviceFlags[Chunk.tileIndex(0, 0)] & WorldConstants.SERVICE_HEALTHCARE) != 0,
+            "the source tile itself is covered");
+
+        // 90 tiles east exceeds a Clinic's 25-tile flood-fill radius.
+        Chunk farChunk = store.get(2, 0);
+        assertFalse((farChunk.serviceFlags[Chunk.tileIndex(26, 0)] & WorldConstants.SERVICE_HEALTHCARE) != 0,
+            "coverage must not extend past the service radius");
+    }
 }

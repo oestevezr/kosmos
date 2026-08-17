@@ -72,8 +72,7 @@ public final class RoadNetwork {
     }
 
     private static void setBit(Chunk chunk, int idx, int bit, boolean value) {
-        int flags = chunk.serviceFlags[idx] & 0xFF;
-        int updated = value ? (flags | bit) : (flags & ~bit);
-        chunk.serviceFlags[idx] = (byte) updated;
+        int flags = chunk.serviceFlags[idx];
+        chunk.serviceFlags[idx] = value ? (flags | bit) : (flags & ~bit);
     }
 }

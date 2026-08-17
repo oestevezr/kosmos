@@ -45,6 +45,17 @@ public final class PopulationSystem {
     private static final int REQUIRED_SERVICE_MASK =
         WorldConstants.SERVICE_ROAD_ACCESS | WorldConstants.SERVICE_POWERED | WorldConstants.SERVICE_WATERED;
 
+    // Satisfaction ceilings by service tier (Fase 2's "prosperity/luxury" civic services — spec
+    // §23's attractiveness factors, finally consumed instead of just displayed). A tile always
+    // meets REQUIRED_SERVICE_MASK to get here (see growExistingBuildings's early return), so 60 is
+    // the floor once the essentials exist, not the floor overall.
+    private static final int PROSPERITY_MASK = WorldConstants.SERVICE_HEALTHCARE | WorldConstants.SERVICE_FIRE
+        | WorldConstants.SERVICE_SANITATION | WorldConstants.SERVICE_CEMETERY;
+    private static final int LUXURY_MASK = WorldConstants.SERVICE_PARK | WorldConstants.SERVICE_MUSEUM;
+    private static final int SATISFACTION_CEILING_BASE = 60;
+    private static final int SATISFACTION_CEILING_PROSPERITY = 85;
+    private static final int SATISFACTION_CEILING_LUXURY = 100;
+
     // Per-city totals, indexed by cityId — grown lazily to match CityRegistry.highWaterMark().
     // A handful of cities (spec §42.3's CITY aggregation tier), so plain arrays sized to city
     // count are trivial; this is not the per-building/per-tile hot path §42.4 warns about.
@@ -112,24 +123,47 @@ public final class PopulationSystem {
             if (type != BuildingType.RESIDENTIAL && type != BuildingType.COMMERCIAL && type != BuildingType.INDUSTRIAL) {
                 return;
             }
-            boolean serviced = isServiced(store, buildings.tileX(id), buildings.tileY(id));
-            if (!serviced) {
+            int flags = serviceFlagsAt(store, buildings.tileX(id), buildings.tileY(id));
+            if ((flags & REQUIRED_SERVICE_MASK) != REQUIRED_SERVICE_MASK) {
                 buildings.setSatisfactionPercent(id, buildings.satisfactionPercent(id) - SATISFACTION_DECAY_STEP);
                 return;
             }
-            buildings.setSatisfactionPercent(id, buildings.satisfactionPercent(id) + SATISFACTION_RECOVERY_STEP);
+
+            // Move satisfaction toward the ceiling its prosperity/luxury coverage allows, rather
+            // than a flat +/- step — this is the same code whether the ceiling just rose (built a
+            // hospital) or fell (demolished a park), no special case needed either way.
+            int ceiling = satisfactionCeiling(flags);
+            int currentSatisfaction = buildings.satisfactionPercent(id);
+            if (currentSatisfaction < ceiling) {
+                buildings.setSatisfactionPercent(id, Math.min(ceiling, currentSatisfaction + SATISFACTION_RECOVERY_STEP));
+            } else if (currentSatisfaction > ceiling) {
+                buildings.setSatisfactionPercent(id, Math.max(ceiling, currentSatisfaction - SATISFACTION_DECAY_STEP));
+            }
 
             int cityId = buildings.cityId(id);
             // Being in flood-fill range isn't enough — the city's installed capacity must also
-            // cover its demand (spec's tiered-service capacity model, see UtilitySystem's javadoc).
+            // cover its demand (spec's tiered-service capacity model, see UtilitySystem's javadoc),
+            // and satisfaction (just updated above) throttles growth the same way — a city with no
+            // prosperity services stays capped near its base ceiling's multiplier forever.
             double growthRateMultiplier = cities.difficulty().growthRateMultiplier
-                * utility.powerCoverageRatio(cityId) * utility.waterCoverageRatio(cityId);
+                * utility.powerCoverageRatio(cityId) * utility.waterCoverageRatio(cityId)
+                * (buildings.satisfactionPercent(id) / 100.0);
             if (type == BuildingType.RESIDENTIAL) {
                 growResidential(buildings, id, cityId, growthRateMultiplier);
             } else {
                 growWorkplace(buildings, id, cityId, growthRateMultiplier);
             }
         });
+    }
+
+    private static int satisfactionCeiling(int serviceFlags) {
+        if ((serviceFlags & LUXURY_MASK) != 0) {
+            return SATISFACTION_CEILING_LUXURY;
+        }
+        if ((serviceFlags & PROSPERITY_MASK) != 0) {
+            return SATISFACTION_CEILING_PROSPERITY;
+        }
+        return SATISFACTION_CEILING_BASE;
     }
 
     private void growResidential(BuildingRegistry buildings, int id, int cityId, double growthRateMultiplier) {
@@ -170,7 +204,7 @@ public final class PopulationSystem {
                     if (chunk.zoneType[idx] == WorldConstants.ZONE_NONE || chunk.buildingId[idx] != WorldConstants.NO_BUILDING) {
                         continue;
                     }
-                    int flags = chunk.serviceFlags[idx] & 0xFF;
+                    int flags = chunk.serviceFlags[idx];
                     if ((flags & REQUIRED_SERVICE_MASK) != REQUIRED_SERVICE_MASK) {
                         continue;
                     }
@@ -208,13 +242,13 @@ public final class PopulationSystem {
         return v;
     }
 
-    private static boolean isServiced(ChunkStore store, int worldTileX, int worldTileY) {
+    /** Returns 0 (nothing serviced) if the building's chunk streamed out — treat as unserviced until it's back. */
+    private static int serviceFlagsAt(ChunkStore store, int worldTileX, int worldTileY) {
         Chunk chunk = WorldTileAccess.chunkAt(store, worldTileX, worldTileY);
         if (chunk == null) {
-            return false; // building's chunk streamed out — treat as unserviced until it's back
+            return 0;
         }
         int idx = WorldTileAccess.localIndexAt(worldTileX, worldTileY);
-        int flags = chunk.serviceFlags[idx] & 0xFF;
-        return (flags & REQUIRED_SERVICE_MASK) == REQUIRED_SERVICE_MASK;
+        return chunk.serviceFlags[idx];
     }
 }

@@ -88,7 +88,7 @@ class SaveRoundTripTest {
             source.zoneType[i] = (byte) (i % 4);
             source.roadType[i] = (byte) (i % 2);
             source.buildingId[i] = i * 31;
-            source.serviceFlags[i] = (byte) (i % 8);
+            source.serviceFlags[i] = i % 8;
         }
         source.markDirty();
 

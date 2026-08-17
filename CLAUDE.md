@@ -83,9 +83,20 @@ el código fuente.
   al zonificar, no cuando el edificio nace solo). `UtilitySystem` calcula capacidad real (población
   servida vs. generada) por ciudad, expuesta como `powerCoverageRatio`/`waterCoverageRatio`;
   `PopulationSystem` multiplica el crecimiento por esos ratios. Nuevos `CommandResult`:
-  `REJECTED_INSUFFICIENT_FUNDS`, `REJECTED_SERVICE_TIER_LOCKED`. Fase 2 (Hospital/Bomberos/
-  Basura/Cementerio/Parques/Museo) queda documentada pero sin implementar — reusará esta misma
-  maquinaria.
+  `REJECTED_INSUFFICIENT_FUNDS`, `REJECTED_SERVICE_TIER_LOCKED`.
+- **Servicios cívicos por tiers — Fase 2 (Prosperidad + Lujo)**: completa (ver `docs/roadmap.md`).
+  9 tipos nuevos en `BuildingType` (`COUNT` 25): Salud (`CLINIC`→`HOSPITAL`), Bomberos
+  (`VOLUNTEER_FIRE_BRIGADE`→`FIRE_STATION`), Saneamiento (`WASTE_COLLECTION`→`INCINERATOR`), y
+  `CEMETERY`/`PARK`/`MUSEUM` sin tier 2 (el usuario los describió como "ya otorgan el máximo
+  nivel"). Ninguno tiene `CAPACITY` en `BuildingEconomics` — solo cobertura binaria, que ahora sube
+  el **techo** de `satisfactionPercent` (sin cobertura 60, con prosperidad 85, con lujo 100) en
+  `PopulationSystem`; el crecimiento por fin multiplica por `satisfactionPercent/100.0`, cerrando
+  un ciclo abierto desde Fase 2 original (satisfacción se calculaba pero nunca se usaba). Museo es
+  el único edificio cívico con ingreso propio (turismo). Nuevo `BuildCivicBuildingCommand`
+  data-driven (como `BuildProductionBuildingCommand`) para los 9 tipos — reutiliza los
+  `CommandResult` de Fase 1, no hizo falta ninguno nuevo. `Chunk.serviceFlags` pasó de `byte[]` a
+  `int[]` (9 bits de servicio no caben en un byte) — `ChunkDeltaIO.FORMAT_VERSION` 3, saves viejos
+  no cargan.
 - **MVP 0.6 (Regional Passenger Transport) en adelante**: solo planificado (`docs/roadmap.md`),
   sin código.
 

@@ -24,13 +24,14 @@ import java.nio.file.Path;
 public final class ChunkDeltaIO {
 
     private static final int MAGIC = 0x41544344; // "ATCD"
-    /** Bumped to 2 in Fase 2 to add zone/road/building/service layers (spec §32 applies to save
-     *  formats too: a format change must be a deliberate version bump, not a silent reinterpretation). */
-    private static final int FORMAT_VERSION = 2;
+    /** Bumped to 3 in Fase 2 of the tiered-service system: serviceFlags widened from byte[] to
+     *  int[] to fit the new civic-service coverage bits (spec §32 applies to save formats too: a
+     *  format change must be a deliberate version bump, not a silent reinterpretation). */
+    private static final int FORMAT_VERSION = 3;
     private static final int EXPECTED_PAYLOAD_LENGTH =
         WorldConstants.TILES_PER_CHUNK * (5 /* natural byte layers */ + 2 /* elevation short */
             + 4 /* resourceFlags int */ + 2 /* zoneType + roadType */ + 4 /* buildingId int */
-            + 1 /* serviceFlags */)
+            + 4 /* serviceFlags int */)
             + 8; // + chunkX/chunkY ints
 
     public static void write(Path chunkFile, Chunk chunk) throws IOException {
@@ -59,7 +60,9 @@ public final class ChunkDeltaIO {
             for (int id : chunk.buildingId) {
                 body.writeInt(id);
             }
-            body.write(chunk.serviceFlags);
+            for (int flags : chunk.serviceFlags) {
+                body.writeInt(flags);
+            }
             BinaryBlockIO.writeBlock(out, buf.toByteArray());
         });
     }
@@ -104,7 +107,9 @@ public final class ChunkDeltaIO {
             for (int i = 0; i < target.buildingId.length; i++) {
                 target.buildingId[i] = bodyIn.readInt();
             }
-            bodyIn.readFully(target.serviceFlags);
+            for (int i = 0; i < target.serviceFlags.length; i++) {
+                target.serviceFlags[i] = bodyIn.readInt();
+            }
             target.markDirty();
         }
     }

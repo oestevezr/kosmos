@@ -199,6 +199,22 @@ public final class BuildingRegistry {
         return id > 0 && id < highWaterMark && active[id];
     }
 
+    /**
+     * Sums population across every active RESIDENTIAL building owned by {@code cityId} — the
+     * "has this city grown enough to unlock the next service tier" check (spec's tiered-service
+     * system). A plain O(buildings) scan, not a hot-loop concern — only construction commands call
+     * this, the same performance class as {@code GovernmentFinanceSystem}'s per-tick per-city scan.
+     */
+    public long residentialPopulationOfCity(int targetCityId) {
+        long total = 0;
+        for (int id = 1; id < highWaterMark; id++) {
+            if (active[id] && cityId[id] == targetCityId && type[id] == BuildingType.RESIDENTIAL) {
+                total += population[id];
+            }
+        }
+        return total;
+    }
+
     public byte type(int id) {
         return type[id];
     }

@@ -7,6 +7,7 @@ public final class EconomyCommandTypeIds {
     public static final int REQUEST_CITY_LOAN = 22;
     public static final int REPAY_LOAN = 23;
     public static final int BUILD_PORT = 24;
+    public static final int BUILD_CIVIC_BUILDING = 25;
 
     private EconomyCommandTypeIds() {
     }

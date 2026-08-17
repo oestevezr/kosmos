@@ -426,6 +426,70 @@ antes.
 
 ---
 
+## Servicios cívicos por tiers — Fase 2: Prosperidad y Lujo — ✅ Completo (fuera de la secuencia MVP del spec, pedido explícito del usuario)
+
+### Motivación
+Continuación directa de la Fase 1: los servicios de **prosperidad** (hospital, bomberos,
+recolección de basura, incineradoras, cementerios) y **lujo** (parques, museos) que se habían
+diseñado conceptualmente antes del pivote a "tiers reales" pero quedaron documentados, no
+implementados. A diferencia de Electricidad/Agua (que modulan el crecimiento vía una razón
+capacidad/demanda), estos servicios no tienen una unidad de "capacidad" real que tenga sentido —
+en su lugar, cierran el ciclo que `satisfactionPercent` (`BuildingRegistry`) dejó abierto desde
+Fase 2 original del spec: calculado desde entonces, nunca consumido hasta ahora.
+
+### Nuevos tipos de edificio
+9 tipos nuevos en `BuildingType` (16→24, `COUNT` 16→25), 3 categorías con 2 tiers cada una y 2
+categorías de lujo sin tiers:
+- **Salud**: `CLINIC` (tier 1, siempre disponible) → `HOSPITAL` (tier 2, desbloquea a 1000 de
+  población).
+- **Bomberos**: `VOLUNTEER_FIRE_BRIGADE` → `FIRE_STATION` (desbloquea a 1000).
+- **Saneamiento**: `WASTE_COLLECTION` → `INCINERATOR` (desbloquea a 800) — Basura+Incineradora
+  modelados como 2 tiers de una sola categoría, no dos separadas, mismo criterio de simplificación
+  que Electricidad/Agua.
+- **Cementerio, Parque, Museo**: sin tier 2 — el usuario los describió como servicios que "ya
+  otorgan los máximos niveles" al construirse, así que no hay una versión "más grande" con sentido
+  todavía. Museo es el único edificio cívico que genera ingreso propio (turismo, neto +6/accrual
+  tras su propio mantenimiento) — confirmado con el usuario en la ronda de preguntas de Fase 1.
+
+Ninguno de estos 9 tipos tiene `CAPACITY` en `BuildingEconomics` (a diferencia de Electricidad/
+Agua) — "¿cuánta población sirve un hospital?" no tiene una unidad natural (spec §20), así que solo
+aportan cobertura binaria.
+
+### Techo de satisfacción + crecimiento real
+`UtilitySystem` gana 6 categorías de flood-fill más (mismo patrón que Electricidad/Agua, sin razón
+de capacidad/demanda — solo el bit de cobertura). `PopulationSystem` reemplaza el
+`+SATISFACTION_RECOVERY_STEP`/`-SATISFACTION_DECAY_STEP` plano (que dependía únicamente del gate
+esencial) por moverse hacia un **techo** derivado de qué bits de prosperidad/lujo cubren el tile:
+sin ninguno, 60; con ≥1 de prosperidad, 85; con ≥1 de lujo, 100. El cambio que cierra el ciclo:
+`growResidential`/`growWorkplace` ahora multiplican el crecimiento por
+`satisfactionPercent / 100.0`, además de `Difficulty.growthRateMultiplier` y los ratios de
+capacidad de Electricidad/Agua — una ciudad sin ningún servicio de prosperidad queda permanentemente
+limitada a ~60% de multiplicador de crecimiento hasta que el jugador construya alguno.
+
+### `BuildCivicBuildingCommand`
+Mismo patrón data-driven que `BuildProductionBuildingCommand`: un solo comando parametrizado por
+`byte buildingType` para los 9 tipos nuevos en vez de 9 clases casi idénticas. Reutiliza
+`REJECTED_SERVICE_TIER_LOCKED`/`REJECTED_INSUFFICIENT_FUNDS`/`REJECTED_NO_CITY_FOUNDED` ya
+existentes desde Fase 1 — no hizo falta ningún `CommandResult` nuevo. El chequeo de población de
+desbloqueo se extrajo de `AbstractPlaceUtilityBuildingCommand` (que lo tenía privado y duplicado
+en potencia) a un método público `BuildingRegistry.residentialPopulationOfCity(int cityId)`,
+compartido por ambos comandos.
+
+### Persistencia — `Chunk.serviceFlags` de `byte[]` a `int[]` (bump de formato, anticipado en Fase 1)
+3 bits usados + 6 nuevos = 9, no caben en un `byte` (8 bits) — Fase 1 ya documentó que esta fase
+necesitaría el ensanche. `ChunkDeltaIO.FORMAT_VERSION` 2→3 (el bloque de `serviceFlags` pasa de un
+`byte[]` en bloque a un loop `writeInt`/`readInt` por tile, mismo patrón que `buildingId`); saves
+viejos quedan no-cargables — mismo criterio ya aplicado a `BuildingRegistryIO`/`ShipmentRegistryIO`/
+`CityRegistryIO` en fases anteriores (sin build de release todavía).
+
+### Fuera de alcance de esta fase (documentado, no implementado)
+- Ayuntamiento, Banco Central, Policía, Educación, Iglesias — no confirmados para ninguna fase.
+- Densidad evolutiva estilo TheOtown — sigue sin relación directa, anotada como posible fase futura.
+- Capacidad/demanda real para prosperidad/lujo (ej. "un hospital atiende X pacientes") — sin unidad
+  natural, se mantiene como cobertura binaria + techo de satisfacción.
+
+---
+
 ## MVP 0.6 — Regional Passenger Transport
 
 ### Qué pide el spec

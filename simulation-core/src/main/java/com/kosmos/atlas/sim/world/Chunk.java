@@ -27,7 +27,8 @@ public final class Chunk {
     public final byte[] zoneType = new byte[WorldConstants.TILES_PER_CHUNK];
     public final byte[] roadType = new byte[WorldConstants.TILES_PER_CHUNK];
     public final int[] buildingId = new int[WorldConstants.TILES_PER_CHUNK];
-    public final byte[] serviceFlags = new byte[WorldConstants.TILES_PER_CHUNK];
+    /** {@code int}, not {@code byte} — Fase 2's civic-service tiers pushed past 8 usable bits. */
+    public final int[] serviceFlags = new int[WorldConstants.TILES_PER_CHUNK];
 
     private int chunkX;
     private int chunkY;
@@ -55,7 +56,7 @@ public final class Chunk {
         Arrays.fill(zoneType, WorldConstants.ZONE_NONE);
         Arrays.fill(roadType, WorldConstants.ROAD_NONE);
         Arrays.fill(buildingId, WorldConstants.NO_BUILDING);
-        Arrays.fill(serviceFlags, (byte) 0);
+        Arrays.fill(serviceFlags, 0);
     }
 
     public int chunkX() {

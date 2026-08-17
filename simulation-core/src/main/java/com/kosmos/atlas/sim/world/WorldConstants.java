@@ -58,11 +58,24 @@ public final class WorldConstants {
     /** Building occupying a tile, or {@link #NO_BUILDING} if the tile is empty (spec §22, §42.3). */
     public static final int NO_BUILDING = 0;
 
-    // --- Per-tile service flag bits (packed into Chunk.serviceFlags[tile]) ---
+    // --- Per-tile service flag bits (packed into Chunk.serviceFlags[tile], an int since Fase 2's
+    // civic-service tiers pushed past a byte's 8 bits). ---
     /** Set by UtilitySystem when the tile is graph-reachable from a power source (spec §24). */
     public static final int SERVICE_POWERED = 1;
     /** Set by UtilitySystem when the tile is graph-reachable from a water source (spec §24). */
     public static final int SERVICE_WATERED = 1 << 1;
     /** Set by RoadNetwork when the tile is adjacent to a connected road (spec §12, §23 "transport"). */
     public static final int SERVICE_ROAD_ACCESS = 1 << 2;
+
+    // --- Prosperity/luxury civic-service coverage bits (Fase 2 — see PopulationSystem's
+    // satisfaction-ceiling logic; docs/roadmap.md's "Servicios cívicos por tiers"). ---
+    /** Set when in range of a Clinic or Hospital (either tier of the Healthcare category). */
+    public static final int SERVICE_HEALTHCARE = 1 << 3;
+    /** Set when in range of a Volunteer Fire Brigade or Fire Station. */
+    public static final int SERVICE_FIRE = 1 << 4;
+    /** Set when in range of Waste Collection or an Incinerator. */
+    public static final int SERVICE_SANITATION = 1 << 5;
+    public static final int SERVICE_CEMETERY = 1 << 6;
+    public static final int SERVICE_PARK = 1 << 7;
+    public static final int SERVICE_MUSEUM = 1 << 8;
 }

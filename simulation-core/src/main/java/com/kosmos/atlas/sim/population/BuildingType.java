@@ -40,8 +40,32 @@ public final class BuildingType {
     /** Water tier 3. */
     public static final byte DESALINATION_PLANT = 15;
 
+    // --- Prosperity/luxury civic services (Fase 2 of the tiered-service system, see
+    // docs/roadmap.md). Unlike Electricity/Water, these have no population-capacity concept — they
+    // only feed PopulationSystem's satisfaction ceiling, since "how much population does a
+    // hospital serve" has no natural unit (spec §20's understandable-not-hyperrealistic MVP). ---
+    /** Healthcare tier 1. */
+    public static final byte CLINIC = 16;
+    /** Healthcare tier 2 — unlocked once the city is populous enough (see BuildingEconomics). */
+    public static final byte HOSPITAL = 17;
+    /** Fire safety tier 1. */
+    public static final byte VOLUNTEER_FIRE_BRIGADE = 18;
+    /** Fire safety tier 2. */
+    public static final byte FIRE_STATION = 19;
+    /** Sanitation tier 1. */
+    public static final byte WASTE_COLLECTION = 20;
+    /** Sanitation tier 2. */
+    public static final byte INCINERATOR = 21;
+    /** No tier 2 — the user described this and Park/Museum below as services that "already grant
+     *  the maximum level" once built. */
+    public static final byte CEMETERY = 22;
+    /** Luxury — no tier 2, satisfaction-ceiling coverage only. */
+    public static final byte PARK = 23;
+    /** Luxury — the one civic building that generates its own revenue (tourism), see BuildingEconomics. */
+    public static final byte MUSEUM = 24;
+
     /** One past the highest constant above — sizes BuildingEconomics's per-type tables. */
-    public static final int COUNT = 16;
+    public static final int COUNT = 25;
 
     private BuildingType() {
     }
