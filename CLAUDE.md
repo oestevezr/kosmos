@@ -130,18 +130,29 @@ el código fuente.
   y satisfecho, degrada uno que perdió cobertura (recortando ocupantes a la nueva capacidad).
   `GovernmentFinanceSystem` pondera la base gravable por `wageMultiplier` del nivel.
   `BuildingRegistryIO.FORMAT_VERSION` 3→4, saves viejos no cargan.
-- **MVP 0.6 (Regional Passenger Transport) — parcial**: Migración y Aeropuerto completos (ver
-  `docs/roadmap.md`); rail intercity, autobuses y turismo quedan pendientes (necesitan el primer uso
-  real de las aristas de `RegionalGraph`, hoy topología sin flujo). **Migración**: ajuste de fórmula
-  en `PopulationSystem.settleEmptyZonedTiles` — la siembra residencial inicial se escala por
+- **MVP 0.6 (Regional Passenger Transport) — completo, con alcance ajustado**: ver
+  `docs/roadmap.md` para el detalle de las dos pasadas. **Migración**: ajuste de fórmula en
+  `PopulationSystem.settleEmptyZonedTiles` — la siembra residencial inicial se escala por
   `migrationMultiplier` (superávit local de empleos + actividad exportadora de `MarketSystem`/
-  `GoodsLedger`, sin sistema nuevo ni campo persistido). **Aeropuerto**: `BuildingType.AIRPORT`
-  (`COUNT` 33), mismo patrón que Puerto (0.5) pero sin chequeo de costa y gateado por población
-  (`unlockPopulation=3000`) en vez de por ciudad prestamista; `AirportRegistry` (nuevo, sin
-  `passenger_capacity` — sin lector todavía) y `MarketSystem.runGateways` gana su tercera rama.
-  Se corrigió de paso un bug preexistente de 0.5: `DemolishCommand` solo limpiaba nodos de
-  `EXTERNAL_MARKET` en `RegionalGraph`, dejando huérfano el nodo de cualquier Puerto demolido.
-  Persistencia: `airports.dat` (nuevo), sin bump de formatos existentes.
+  `GoodsLedger`, sin sistema nuevo ni campo persistido). **Aeropuerto**: `BuildingType.AIRPORT`,
+  mismo patrón que Puerto (0.5) pero sin chequeo de costa y gateado por población
+  (`unlockPopulation=3000`); `AirportRegistry` (sin `passenger_capacity` — sin lector todavía).
+  **Rail**: `BuildingType.RAIL_TERMINAL`, cuarto gateway de `MarketSystem.runGateways` (junto a
+  Trade Depot/Puerto/Aeropuerto), sin costa/población/aduana (comercio doméstico); `StationRegistry`
+  (nuevo), nodo `NodeType.STATION`. **Autobuses**: la pieza nueva — `BUS_DEPOT` (central,
+  `BuildingEconomics.capacity` = rutas simultáneas máximas) + `BUS_STOP` (parada, cobertura solo si
+  pertenece a una ruta activa) + `BusRouteRegistry` (nuevo, SoA de ancho fijo — array aplanado
+  `id*MAX_STOPS_PER_ROUTE+slot`, sin persistencia porque sus rutas referencian aristas de
+  `RegionalGraph`, que tampoco se persiste) + `CreateBusRouteCommand`, el **primer uso real** de
+  `RegionalGraph.addEdge` en el proyecto. Nuevo `WorldConstants.SERVICE_TRANSIT` en
+  `PROSPERITY_MASK`; `UtilitySystem.floodFillFromSources` se partió en un `runBfs` compartido +
+  `floodFillFromRouteStops` (filtra por `busRoutes.isStopInAnyActiveRoute`). **Turismo**: ingreso de
+  ciudad dentro de `GovernmentFinanceSystem` (no un sistema nuevo) — proporcional a
+  población×atracciones Museo/Parque activas, con topes. Se corrigió de paso un bug preexistente de
+  0.5: `DemolishCommand` solo limpiaba nodos `EXTERNAL_MARKET` en `RegionalGraph`, dejando huérfano
+  el nodo de cualquier Puerto demolido — ahora mapea cualquier tipo de edificio gateway a su
+  `NodeType`. Persistencia: `airports.dat`/`stations.dat` (nuevos), sin bump de formatos existentes
+  (`BusRouteRegistry` deliberadamente sin persistir).
 
 ## Estructura del proyecto
 
@@ -161,9 +172,11 @@ simulation-core/   Java puro. CERO dependencias de libGDX/LWJGL/Android — regl
                     LoanRegistry/LoanSystem/LoanLenderType (sistema de préstamos),
                     BuildingEconomics (costo/mantenimiento/capacidad/radio/desbloqueo por tipo)
   sim/trade/        RegionalGraph (nodos/aristas — adelantado desde MVP 0.4, ver docs/roadmap.md;
-                    aristas siguen sin usarse, `addEdge` nunca se llama todavía),
-                    ShipmentRegistry/System (envíos del TradeDepot/Port/Airport, sin streaming
-                    visual todavía), PortRegistry/AirportRegistry (fila secundaria por buildingId)
+                    `addEdge` lo usa por primera vez CreateBusRouteCommand, MVP 0.6),
+                    ShipmentRegistry/System (envíos del TradeDepot/Port/Airport/RailTerminal, sin
+                    streaming visual todavía), PortRegistry/AirportRegistry/StationRegistry (fila
+                    secundaria por buildingId), BusRouteRegistry (rutas de autobús, SoA de ancho
+                    fijo, sin persistir — ver MVP 0.6 en docs/roadmap.md)
   sim/persistence/  Formato binario propio (magic+versión+CRC32C+escritura atómica), nunca
                     ObjectOutputStream. Un archivo por tipo de estado (world.meta, chunks/*.delta,
                     settlements.dat, cities.dat, routes.dat, loans.dat, ports.dat, ...)

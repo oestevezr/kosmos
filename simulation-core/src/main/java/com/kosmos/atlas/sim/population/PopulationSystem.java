@@ -67,7 +67,8 @@ public final class PopulationSystem {
     // the floor once the essentials exist, not the floor overall.
     private static final int PROSPERITY_MASK = WorldConstants.SERVICE_HEALTHCARE | WorldConstants.SERVICE_FIRE
         | WorldConstants.SERVICE_SANITATION | WorldConstants.SERVICE_CEMETERY
-        | WorldConstants.SERVICE_POLICE | WorldConstants.SERVICE_EDUCATION | WorldConstants.SERVICE_RELIGION;
+        | WorldConstants.SERVICE_POLICE | WorldConstants.SERVICE_EDUCATION | WorldConstants.SERVICE_RELIGION
+        | WorldConstants.SERVICE_TRANSIT;
     private static final int LUXURY_MASK = WorldConstants.SERVICE_PARK | WorldConstants.SERVICE_MUSEUM;
     private static final int SATISFACTION_CEILING_BASE = 60;
     private static final int SATISFACTION_CEILING_PROSPERITY = 85;

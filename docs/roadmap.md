@@ -655,7 +655,7 @@ ameritó una pasada de optimización. Cifra registrada en `docs/architecture.md`
 
 ---
 
-## MVP 0.6 — Regional Passenger Transport — 🟡 Parcial (Migración + Aeropuerto completos; rail/autobuses/turismo pendientes)
+## MVP 0.6 — Regional Passenger Transport — ✅ Completo (con alcance ajustado, ver abajo)
 
 ### Qué pide el spec
 Rail intercity, autobuses, migración, turismo, prototipo de aeropuerto (§16, §19).
@@ -713,17 +713,73 @@ columna sin lector).
 - Persistencia: `airports.dat` (nuevo), mismo molde atómico que `ports.dat`. Ningún formato
   existente cambió de versión.
 
-### Fuera de alcance de esta pasada
+### Fuera de alcance de la primera pasada (Migración + Aeropuerto)
 - Pasajeros de verdad (aristas de `RegionalGraph`, matrices de viaje spec §16, autobuses, rail
-  intercity) — necesitan `addEdge`/`travel_time`/`congestion`/`reliability`, hoy inexistentes en la
-  práctica (`addEdge` nunca se llama).
-- `AirportRegistry`/`PortRegistry` `passengerCapacity` — sin lector todavía.
-- Turismo como ingreso de ciudad — el Museo ya genera ingreso propio (Fase 2 cívica); un puntaje de
-  turismo a nivel ciudad se diseña junto con pasajeros.
+  intercity) — necesitaban `addEdge`/`travel_time`/`congestion`/`reliability`, hasta entonces
+  inexistentes en la práctica (`addEdge` nunca se llamaba). **Resuelto en la segunda pasada, abajo.**
+- `AirportRegistry`/`PortRegistry` `passengerCapacity` — sigue sin lector.
+- Turismo como ingreso de ciudad. **Resuelto en la segunda pasada, abajo.**
 - Requisito de "regional accessibility" del aeropuerto (spec §19) — simplificado a solo población,
   mismo criterio que ya se usó para Banco Central (solo tesorería).
-- `MarketSystem.updateTransportCosts` sigue sin considerar nodos `PORT`/`AIRPORT` — gap preexistente
-  de 0.5, no introducido por este cambio.
+- `MarketSystem.updateTransportCosts` sigue sin considerar nodos `PORT`/`AIRPORT`/`STATION` — gap
+  preexistente de 0.5, no introducido por este cambio.
+
+## Segunda pasada de MVP 0.6: Rail, rutas de autobús y turismo
+
+### Rail — `RAIL_TERMINAL`, cuarto gateway de carga
+Repite exactamente el patrón de `BuildAirportCommand`/`AirportRegistry` (spec §18: "excels at bulk
+cargo") con tres diferencias: sin chequeo de costa (como Aeropuerto), sin gate de población (a
+diferencia de Aeropuerto — solo el spec §19 "small town" aplica a aeropuertos, no a rail) y sin
+bono de aduana (`StationRegistry` tiene solo `platforms`/`cargoCapacityPerTick`, no
+`customsEfficiencyPercent` — es comercio doméstico entre ciudades del mismo mundo, no cruza una
+frontera internacional). `MarketSystem.runGateways` gana una cuarta rama. Registra un nodo
+`NodeType.STATION` (ya declarado desde MVP 0.3/0.5, sin uso hasta ahora). Persistencia:
+`stations.dat`, mismo molde que `ports.dat`/`airports.dat`.
+
+### Autobuses — la mecánica nueva: diseño de rutas real
+Pedido explícito del usuario: no un número agregado, sino colocar una Central (`BUS_DEPOT`) y
+Estaciones/paradas (`BUS_STOP`) y armar una ruta ordenada conectándolas. Es el **primer uso real**
+de `RegionalGraph.addEdge` — Puerto/Aeropuerto/Rail son los tres nodos previos sin aristas.
+
+- `NodeType.BUS_STOP` (nueva constante, distinta de `STATION` — "estación" en español nombra tanto
+  la parada de bus como la terminal de tren; en inglés quedan como identificadores separados para
+  evitar la ambigüedad).
+- `BusRouteRegistry` (nuevo) — una ruta es un depósito + entre 2 y `MAX_STOPS_PER_ROUTE=6` paradas
+  ordenadas. En vez de una lista de longitud variable (que rompería la convención SoA del proyecto),
+  usa el mismo truco ya documentado en `CLAUDE.md` para categorías fijas y pequeñas: un array
+  aplanado `id * MAX_STOPS_PER_ROUTE + slot`. **Sin persistencia** — sus rutas referencian aristas de
+  `RegionalGraph`, que tampoco se persiste hoy (gap preexistente de Puerto/Aeropuerto/Rail);
+  persistir uno sin el otro dejaría estado inconsistente al cargar.
+- `CreateBusRouteCommand` — valida tipos/misma ciudad/tope de rutas por depósito
+  (`BuildingEconomics.capacity(BUS_DEPOT)`, reutiliza la columna `CAPACITY` existente con un
+  significado nuevo: "cuántas rutas simultáneas puede despachar"), luego llama
+  `graph.addEdge(EdgeType.ROAD, ...)` una vez por cada par consecutivo de paradas. `EdgeType.ROAD`
+  porque los autobuses corren sobre calles, no rieles.
+- **Efecto de juego**: nuevo `WorldConstants.SERVICE_TRANSIT` (bit 12, ya cabe en el `int` existente
+  de `Chunk.serviceFlags`, sin bump de formato). `UtilitySystem` solo da cobertura de tránsito a las
+  paradas que efectivamente pertenecen a **una ruta activa** — una parada aislada sin ruta no da
+  nada, recompensando mecánicamente diseñar rutas de verdad en vez de solo construir paradas
+  sueltas. Esto exigió extraer la parte de BFS-desde-frontera-sembrada de `floodFillFromSources` a
+  un método compartido (`runBfs`), reutilizado por un nuevo `floodFillFromRouteStops` que filtra por
+  `busRoutes.isStopInAnyActiveRoute`. `PopulationSystem.PROSPERITY_MASK` gana `SERVICE_TRANSIT` —
+  mismo techo 85 que el resto de servicios de prosperidad, cero lógica nueva.
+
+### Turismo — ingreso de ciudad dentro de `GovernmentFinanceSystem`
+Extiende el scan por-ciudad que `collectForOneCity` ya hace (no un sistema nuevo): cuenta edificios
+`MUSEUM`+`PARK` activos de la ciudad (ya visitados en el mismo loop) y agrega
+`min(atracciones, 5) * min(población, 5000) * 0.02` al ingreso cívico ya existente. **Simplificación
+explícita**: es "tiene Museo/Parque activos", no "población dentro del radio de cobertura de
+Museo/Parque" — esto último exigiría pasarle `ChunkStore` a `GovernmentFinanceSystem.tick` (que hoy
+no lo recibe) por una ganancia marginal, así que se documenta como la lectura dada a "cobertura" en
+vez de implementarla literalmente por radio.
+
+### Fuera de alcance de esta segunda pasada
+- Flujo/congestión real sobre las aristas de rutas — sin consumidor todavía, igual que las de
+  Puerto/Aeropuerto/Rail. Base para una futura fase de "pasajeros de verdad" (spec §16).
+- Persistencia de `BusRouteRegistry`/aristas de `RegionalGraph` (ver nota arriba).
+- Reordenar/editar una ruta ya creada, o eliminarla sin demoler sus paradas.
+- Turismo ponderado por radio de cobertura real (ver simplificación arriba).
+- Autobuses visibles/animados — `game-client` sigue sin dibujar nada de esto.
 
 ---
 

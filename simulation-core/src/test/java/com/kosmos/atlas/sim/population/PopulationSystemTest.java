@@ -42,6 +42,12 @@ class PopulationSystemTest {
         utility.update(store, buildings, cities);
     }
 
+    private void refreshServices(ChunkStore store, BuildingRegistry buildings, CityRegistry cities,
+                                  UtilitySystem utility, com.kosmos.atlas.sim.trade.BusRouteRegistry busRoutes) {
+        new RoadNetwork().update(store);
+        utility.update(store, buildings, cities, busRoutes);
+    }
+
     @Test
     void unservicedZonedTileNeverSettles() {
         ChunkStore store = new ChunkStore(4);
@@ -493,5 +499,38 @@ class PopulationSystemTest {
         int homeId = chunk.buildingId[Chunk.tileIndex(11, 5)];
         assertTrue(homeId != WorldConstants.NO_BUILDING, "the residential tile must have settled this tick");
         return buildings.population(homeId);
+    }
+
+    @Test
+    void transitCoverageFromAnActiveBusRouteRaisesSatisfactionToTheProsperityCeiling() {
+        ChunkStore store = buildServicedChunk();
+        Chunk chunk = store.get(0, 0);
+        chunk.zoneType[Chunk.tileIndex(11, 5)] = WorldConstants.ZONE_RESIDENTIAL;
+
+        CityRegistry cities = oneCity();
+        BuildingRegistry buildings = new BuildingRegistry();
+        int plantId = buildings.create(BuildingType.POWER_PLANT, 10, 20, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 20)] = plantId;
+        int towerId = buildings.create(BuildingType.WATER_TOWER, 10, 21, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 21)] = towerId;
+        int stopA = buildings.create(BuildingType.BUS_STOP, 10, 22, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 22)] = stopA;
+        int stopB = buildings.create(BuildingType.BUS_STOP, 10, 23, 1);
+        chunk.buildingId[Chunk.tileIndex(10, 23)] = stopB;
+
+        com.kosmos.atlas.sim.trade.BusRouteRegistry busRoutes = new com.kosmos.atlas.sim.trade.BusRouteRegistry();
+        busRoutes.create(1, 1, new int[] {stopA, stopB});
+
+        UtilitySystem utility = new UtilitySystem();
+        PopulationSystem system = new PopulationSystem();
+        int homeId = -1;
+        for (int i = 0; i < 15; i++) {
+            refreshServices(store, buildings, cities, utility, busRoutes);
+            system.tick(store, buildings, cities, utility);
+            homeId = chunk.buildingId[Chunk.tileIndex(11, 5)];
+        }
+
+        assertEquals(85, buildings.satisfactionPercent(homeId),
+            "transit coverage from an active bus route should count as a prosperity-tier service");
     }
 }

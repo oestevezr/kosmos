@@ -31,5 +31,10 @@ public enum CommandResult {
     /** This building's tier requires more city population than the city currently has (spec's tiered-service system). */
     REJECTED_SERVICE_TIER_LOCKED,
     /** The lending city hasn't built a Central Bank yet — the physical prerequisite for offering inter-city credit. */
-    REJECTED_LENDER_HAS_NO_CENTRAL_BANK
+    REJECTED_LENDER_HAS_NO_CENTRAL_BANK,
+    /** A bus route's depot/stop list is malformed: wrong building types, too few/many stops, or a
+     *  depot and stops that don't all belong to the same city. */
+    REJECTED_INVALID_ROUTE,
+    /** The depot already dispatches as many simultaneous routes as its capacity allows. */
+    REJECTED_DEPOT_AT_CAPACITY
 }

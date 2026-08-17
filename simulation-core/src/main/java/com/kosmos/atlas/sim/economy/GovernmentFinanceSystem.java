@@ -17,9 +17,18 @@ import com.kosmos.atlas.sim.population.BuildingType;
  * {@link BuildingEconomics#maintenancePerAccrual} (recurring upkeep) against
  * {@link BuildingEconomics#revenuePerAccrual} (currently only the Museum's tourism income) —
  * charged/collected on the same cadence as tax collection (spec's cost system: construction is
- * one-time, maintenance/revenue are ongoing).
+ * one-time, maintenance/revenue are ongoing). The same scan also derives a city-level
+ * {@link #tourismRevenueFor tourism revenue} from population plus how many Museum/Park attractions
+ * it has (spec §29's "tourism demand", MVP 0.6's third slice — {@code docs/roadmap.md}).
  */
 public final class GovernmentFinanceSystem {
+
+    /** Diminishing returns past this many active Museum/Park attractions in one city — spec §20's
+     *  "understandable rather than hyper-realistic". */
+    private static final int MAX_TOURISM_ATTRACTIONS = 5;
+    /** Tourism revenue doesn't keep scaling forever with city size — capped at this population. */
+    private static final double TOURISM_POPULATION_CAP = 5000;
+    private static final double TOURISM_REVENUE_PER_RESIDENT = 0.02;
 
     /** Runs one tick of revenue collection for every active city. */
     public void tick(BuildingRegistry buildings, CityRegistry cities) {
@@ -37,6 +46,8 @@ public final class GovernmentFinanceSystem {
         double industrialJobs = 0;
         double maintenance = 0;
         double civicRevenue = 0;
+        long rawResidentialPop = 0;
+        int attractionCount = 0;
         int highWaterMark = buildings.highWaterMark();
         for (int id = 1; id < highWaterMark; id++) {
             if (!buildings.isActive(id) || buildings.cityId(id) != cityId) {
@@ -48,18 +59,39 @@ public final class GovernmentFinanceSystem {
             // skyscraper's population pays more tax than the same headcount in starter buildings.
             double wageMultiplier = BuildingDensity.wageMultiplier(buildings.densityLevel(id));
             switch (type) {
-                case BuildingType.RESIDENTIAL -> residentialPop += buildings.population(id) * wageMultiplier;
+                case BuildingType.RESIDENTIAL -> {
+                    residentialPop += buildings.population(id) * wageMultiplier;
+                    rawResidentialPop += buildings.population(id); // tourism scales with headcount, not tax weight
+                }
                 case BuildingType.COMMERCIAL -> commercialJobs += buildings.jobs(id) * wageMultiplier;
                 case BuildingType.INDUSTRIAL -> industrialJobs += buildings.jobs(id) * wageMultiplier;
+                case BuildingType.MUSEUM, BuildingType.PARK -> attractionCount++;
                 default -> { /* utility/production buildings pay no tax */ }
             }
             maintenance += BuildingEconomics.maintenancePerAccrual(type);
             civicRevenue += BuildingEconomics.revenuePerAccrual(type);
         }
         cities.finance(cityId).collectRevenue(Math.round(residentialPop), Math.round(commercialJobs), Math.round(industrialJobs));
-        double net = civicRevenue - maintenance;
+        double net = civicRevenue - maintenance + tourismRevenueFor(rawResidentialPop, attractionCount);
         if (net != 0) {
             cities.finance(cityId).adjustTreasury(net);
         }
+    }
+
+    /**
+     * City-level tourism income (spec §29's "tourism demand") — proportional to how many active
+     * Museum/Park attractions the city has (diminishing returns past {@link #MAX_TOURISM_ATTRACTIONS})
+     * and to its population (capped at {@link #TOURISM_POPULATION_CAP}). Deliberately presence-based
+     * rather than weighted by each attraction's coverage radius — that would need this system to
+     * read {@code Chunk.serviceFlags} per resident, which isn't worth the signature churn for a
+     * marginal precision gain (see {@code docs/roadmap.md}'s note on this simplification).
+     */
+    private static double tourismRevenueFor(long residentialPop, int attractionCount) {
+        if (attractionCount <= 0 || residentialPop <= 0) {
+            return 0;
+        }
+        int cappedAttractions = Math.min(attractionCount, MAX_TOURISM_ATTRACTIONS);
+        double cappedPop = Math.min(residentialPop, TOURISM_POPULATION_CAP);
+        return cappedAttractions * cappedPop * TOURISM_REVENUE_PER_RESIDENT;
     }
 }

@@ -54,12 +54,12 @@ class MarketSystemTest {
         RegionalGraph graph = new RegionalGraph();
         ShipmentRegistry shipments = new ShipmentRegistry();
 
-        system.tick(buildings, cities, graph, shipments, null, null, 0);
+        system.tick(buildings, cities, graph, shipments, null, null, null, 0);
         GoodsLedger ledger = cities.ledger(1);
         assertEquals(6, ledger.inventory(GoodType.STEEL), "the mill runs after the mine in the same id-ordered pass");
         assertEquals(0, ledger.inventory(GoodType.ORE), "all of this tick's ore was consumed by the mill");
 
-        system.tick(buildings, cities, graph, shipments, null, null, 1);
+        system.tick(buildings, cities, graph, shipments, null, null, null, 1);
         assertEquals(12, ledger.inventory(GoodType.STEEL));
         assertEquals(0, ledger.inventory(GoodType.ORE));
     }
@@ -116,7 +116,7 @@ class MarketSystemTest {
 
         double before = cities.finance(1).treasuryBalance();
         ShipmentRegistry shipments = new ShipmentRegistry();
-        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, null, 0);
+        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, null, null, 0);
 
         assertEquals(0, ledger.inventory(GoodType.FUEL), "goods aren't in inventory until the shipment arrives");
         assertTrue(cities.finance(1).treasuryBalance() < before, "importing is paid for at departure, not on arrival");
@@ -141,7 +141,7 @@ class MarketSystemTest {
 
         double before = cities.finance(1).treasuryBalance();
         ShipmentRegistry shipments = new ShipmentRegistry();
-        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, null, 0);
+        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, null, null, 0);
 
         assertTrue(ledger.inventory(GoodType.TIMBER) < 500, "exported goods leave inventory immediately at departure");
         assertEquals(before, cities.finance(1).treasuryBalance(), 1e-9, "export revenue isn't paid until the shipment arrives");
@@ -180,7 +180,7 @@ class MarketSystemTest {
 
         // Every good starts at 0, well under target/2 -> all 8 would want to import at once.
         ShipmentRegistry shipments = new ShipmentRegistry();
-        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, null, 0);
+        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, null, null, 0);
 
         assertTrue(shipments.countActiveForDepot(depot) <= 3,
             "a depot must not depart more than its concurrent-shipment cap in one tick (spec §17 bottleneck)");
@@ -213,7 +213,7 @@ class MarketSystemTest {
         // Every good starts at 0, well under target/2 -> a Trade Depot would cap at 3 concurrent
         // shipments; a Port with 6 berths should be able to depart more than that in one tick.
         ShipmentRegistry shipments = new ShipmentRegistry();
-        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, ports, null, 0);
+        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, ports, null, null, 0);
 
         assertTrue(shipments.countActiveForDepot(port) > 3,
             "a Port's berths, not the Trade Depot concurrency cap, should bound its shipments");
@@ -229,7 +229,7 @@ class MarketSystemTest {
         depotBuildings.create(BuildingType.TRADE_DEPOT, 0, 0, 1, GoodType.NONE, 0, GoodType.NONE, 0);
         stockAllGoodsExcept(depotCity.ledger(1), GoodType.FUEL);
         depotCity.ledger(1).setTargetInventory(GoodType.FUEL, 20);
-        new MarketSystem().tick(depotBuildings, depotCity, new RegionalGraph(), new ShipmentRegistry(), null, null, 0);
+        new MarketSystem().tick(depotBuildings, depotCity, new RegionalGraph(), new ShipmentRegistry(), null, null, null, 0);
         double depotCost = -depotCity.finance(1).treasuryBalance();
 
         BuildingRegistry portBuildings = new BuildingRegistry();
@@ -239,7 +239,7 @@ class MarketSystemTest {
         ports.set(port, 6, 75, 50);
         stockAllGoodsExcept(portCity.ledger(1), GoodType.FUEL);
         portCity.ledger(1).setTargetInventory(GoodType.FUEL, 20);
-        new MarketSystem().tick(portBuildings, portCity, new RegionalGraph(), new ShipmentRegistry(), ports, null, 0);
+        new MarketSystem().tick(portBuildings, portCity, new RegionalGraph(), new ShipmentRegistry(), ports, null, null, 0);
         double portCost = -portCity.finance(1).treasuryBalance();
 
         assertTrue(portCost < depotCost, "a Port's customs efficiency should discount import cost below the Trade Depot's");
@@ -257,10 +257,53 @@ class MarketSystemTest {
         // Every good starts at 0, well under target/2 -> a Trade Depot would cap at 3 concurrent
         // shipments; an Airport with 4 gates should be able to depart more than that in one tick.
         ShipmentRegistry shipments = new ShipmentRegistry();
-        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, airports, 0);
+        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, airports, null, 0);
 
         assertTrue(shipments.countActiveForDepot(airport) > 3,
             "an Airport's gates, not the Trade Depot concurrency cap, should bound its shipments");
+    }
+
+    @Test
+    void railTerminalTradesWithItsOwnCapacityAndConcurrencyCapInsteadOfTradeDepotConstants() {
+        BuildingRegistry buildings = new BuildingRegistry();
+        CityRegistry cities = oneCity();
+        int terminal = buildings.create(BuildingType.RAIL_TERMINAL, 0, 0, 1, GoodType.NONE, 0, GoodType.NONE, 0);
+
+        com.kosmos.atlas.sim.trade.StationRegistry stations = new com.kosmos.atlas.sim.trade.StationRegistry();
+        stations.set(terminal, 5, 60); // platforms, cargo/tick
+
+        // Every good starts at 0, well under target/2 -> a Trade Depot would cap at 3 concurrent
+        // shipments; a Rail Terminal with 5 platforms should be able to depart more than that.
+        ShipmentRegistry shipments = new ShipmentRegistry();
+        new MarketSystem().tick(buildings, cities, new RegionalGraph(), shipments, null, null, stations, 0);
+
+        assertTrue(shipments.countActiveForDepot(terminal) > 3,
+            "a Rail Terminal's platforms, not the Trade Depot concurrency cap, should bound its shipments");
+    }
+
+    @Test
+    void railTerminalHasNoCustomsBonusUnlikePortOrAirport() {
+        // A low target keeps the desired import amount below every gateway's per-tick capacity, so
+        // all import the same quantity — isolating the customs discount as the only variable.
+        BuildingRegistry depotBuildings = new BuildingRegistry();
+        CityRegistry depotCity = oneCity();
+        depotBuildings.create(BuildingType.TRADE_DEPOT, 0, 0, 1, GoodType.NONE, 0, GoodType.NONE, 0);
+        stockAllGoodsExcept(depotCity.ledger(1), GoodType.FUEL);
+        depotCity.ledger(1).setTargetInventory(GoodType.FUEL, 20);
+        new MarketSystem().tick(depotBuildings, depotCity, new RegionalGraph(), new ShipmentRegistry(), null, null, null, 0);
+        double depotCost = -depotCity.finance(1).treasuryBalance();
+
+        BuildingRegistry railBuildings = new BuildingRegistry();
+        CityRegistry railCity = oneCity();
+        int terminal = railBuildings.create(BuildingType.RAIL_TERMINAL, 0, 0, 1, GoodType.NONE, 0, GoodType.NONE, 0);
+        com.kosmos.atlas.sim.trade.StationRegistry stations = new com.kosmos.atlas.sim.trade.StationRegistry();
+        stations.set(terminal, 5, 60);
+        stockAllGoodsExcept(railCity.ledger(1), GoodType.FUEL);
+        railCity.ledger(1).setTargetInventory(GoodType.FUEL, 20);
+        new MarketSystem().tick(railBuildings, railCity, new RegionalGraph(), new ShipmentRegistry(), null, null, stations, 0);
+        double railCost = -railCity.finance(1).treasuryBalance();
+
+        assertEquals(depotCost, railCost, 1e-9, "domestic rail trade has no customs bonus, same cost as a Trade Depot");
     }
 
     /** Pre-stocks every good except {@code excluded} to its target so only that good trades this tick. */
@@ -285,6 +328,6 @@ class MarketSystemTest {
 
     private static void tick(BuildingRegistry buildings, CityRegistry cities,
                               RegionalGraph graph, ShipmentRegistry shipments, long currentTick) {
-        new MarketSystem().tick(buildings, cities, graph, shipments, null, null, currentTick);
+        new MarketSystem().tick(buildings, cities, graph, shipments, null, null, null, currentTick);
     }
 }

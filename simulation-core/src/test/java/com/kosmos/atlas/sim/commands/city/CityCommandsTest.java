@@ -141,6 +141,22 @@ class CityCommandsTest {
     }
 
     @Test
+    void demolishingARailTerminalRemovesItsGraphNode() {
+        com.kosmos.atlas.sim.trade.RegionalGraph graph = new com.kosmos.atlas.sim.trade.RegionalGraph();
+        com.kosmos.atlas.sim.trade.StationRegistry stations = new com.kosmos.atlas.sim.trade.StationRegistry();
+        SimulationContext railCtx = new SimulationContext(
+            store, buildings, cities, graph, null, null, null, stations, null, 4096, 0);
+
+        assertEquals(CommandResult.ACCEPTED,
+            new com.kosmos.atlas.sim.commands.economy.BuildRailTerminalCommand(6, 5).apply(railCtx));
+        assertTrue(graph.nearestNodeOfType(6, 5, com.kosmos.atlas.sim.trade.NodeType.STATION) >= 0);
+
+        assertEquals(CommandResult.ACCEPTED, new DemolishCommand(6, 5).apply(railCtx));
+        assertEquals(-1, graph.nearestNodeOfType(6, 5, com.kosmos.atlas.sim.trade.NodeType.STATION),
+            "demolishing a Rail Terminal must remove its RegionalGraph node too, not leak it");
+    }
+
+    @Test
     void setTaxPolicyUpdatesRateAndRejectsOutOfRange() {
         assertEquals(CommandResult.ACCEPTED, new SetTaxPolicyCommand(cityId, WorldConstants.ZONE_RESIDENTIAL, 0.25).apply(ctx()));
         assertEquals(0.25, cities.finance(cityId).taxRate(WorldConstants.ZONE_RESIDENTIAL));

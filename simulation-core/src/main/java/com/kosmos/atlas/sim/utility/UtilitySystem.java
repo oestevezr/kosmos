@@ -4,6 +4,7 @@ import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.economy.BuildingEconomics;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
+import com.kosmos.atlas.sim.trade.BusRouteRegistry;
 import com.kosmos.atlas.sim.util.LongIntHashMap;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
@@ -103,11 +104,16 @@ public final class UtilitySystem {
     private double[] waterCoverageRatioByCity = new double[4];
 
     public void update(ChunkStore store, BuildingRegistry buildings, CityRegistry cities) {
+        update(store, buildings, cities, null);
+    }
+
+    public void update(ChunkStore store, BuildingRegistry buildings, CityRegistry cities, BusRouteRegistry busRoutes) {
         int coverageOnlyBits = 0;
         for (int bit : COVERAGE_ONLY_SERVICE_BITS) {
             coverageOnlyBits |= bit;
         }
-        clearBits(store, WorldConstants.SERVICE_POWERED | WorldConstants.SERVICE_WATERED | coverageOnlyBits);
+        clearBits(store, WorldConstants.SERVICE_POWERED | WorldConstants.SERVICE_WATERED
+            | coverageOnlyBits | WorldConstants.SERVICE_TRANSIT);
         clearPollution(store);
         for (byte type : POWER_SOURCE_TYPES) {
             floodFillFromSources(store, buildings, type, WorldConstants.SERVICE_POWERED, BuildingEconomics.coverageRadiusTiles(type), 0);
@@ -126,6 +132,10 @@ public final class UtilitySystem {
             if (intensity != 0) {
                 floodFillFromSources(store, buildings, type, 0, BuildingEconomics.pollutionRadiusTiles(type), intensity);
             }
+        }
+        if (busRoutes != null) {
+            floodFillFromRouteStops(store, buildings, busRoutes, WorldConstants.SERVICE_TRANSIT,
+                BuildingEconomics.coverageRadiusTiles(BuildingType.BUS_STOP));
         }
 
         ensureCapacity(cities.highWaterMark());
@@ -225,13 +235,51 @@ public final class UtilitySystem {
             if (!buildings.isActive(id) || buildings.type(id) != sourceType) {
                 continue;
             }
-            long key = packTile(buildings.tileX(id), buildings.tileY(id));
-            if (depthOf.get(key, NOT_VISITED) == NOT_VISITED) {
-                depthOf.put(key, 0);
-                frontier.offer(key);
-            }
+            seedFrontier(buildings.tileX(id), buildings.tileY(id));
         }
 
+        runBfs(store, serviceBit, radiusTiles, pollutionDelta);
+    }
+
+    /**
+     * Same flood-fill as {@link #floodFillFromSources}, but the seed set is every active
+     * {@code BUS_STOP} that {@code busRoutes.isStopInAnyActiveRoute} says belongs to at least one
+     * active route — an isolated, route-less stop never seeds the frontier, so it gives no
+     * coverage (see this class's javadoc and {@code docs/roadmap.md}'s bus-route mechanic).
+     */
+    private void floodFillFromRouteStops(ChunkStore store, BuildingRegistry buildings,
+                                          BusRouteRegistry busRoutes, int serviceBit, int radiusTiles) {
+        frontier.clear();
+        depthOf.clear();
+
+        int highWaterMark = buildings.highWaterMark();
+        for (int id = 1; id < highWaterMark; id++) {
+            if (!buildings.isActive(id) || buildings.type(id) != BuildingType.BUS_STOP) {
+                continue;
+            }
+            if (!busRoutes.isStopInAnyActiveRoute(id)) {
+                continue;
+            }
+            seedFrontier(buildings.tileX(id), buildings.tileY(id));
+        }
+
+        runBfs(store, serviceBit, radiusTiles, 0);
+    }
+
+    private void seedFrontier(int tileX, int tileY) {
+        long key = packTile(tileX, tileY);
+        if (depthOf.get(key, NOT_VISITED) == NOT_VISITED) {
+            depthOf.put(key, 0);
+            frontier.offer(key);
+        }
+    }
+
+    /**
+     * @param serviceBit OR-ed into {@code serviceFlags} at every reached tile, or {@code 0} to skip.
+     * @param pollutionDelta added (saturating) to {@code pollutionLevel} at every reached tile, or
+     *                       {@code 0} to skip. Negative for Park.
+     */
+    private void runBfs(ChunkStore store, int serviceBit, int radiusTiles, int pollutionDelta) {
         while (!frontier.isEmpty()) {
             long key = frontier.poll();
             int wx = unpackX(key);

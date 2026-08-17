@@ -84,6 +84,8 @@ public final class DemolishCommand extends Command {
             case BuildingType.TRADE_DEPOT -> NodeType.EXTERNAL_MARKET;
             case BuildingType.PORT -> NodeType.PORT;
             case BuildingType.AIRPORT -> NodeType.AIRPORT;
+            case BuildingType.RAIL_TERMINAL -> NodeType.STATION;
+            case BuildingType.BUS_STOP -> NodeType.BUS_STOP;
             default -> -1;
         };
     }

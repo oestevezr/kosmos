@@ -113,6 +113,18 @@ public final class BuildingEconomics {
         setPollution(BuildingType.POWER_PLANT, 35, 10);
         setPollution(BuildingType.INCINERATOR, 30, 10);
         setPollution(BuildingType.PARK, -30, 12);
+
+        // --- MVP 0.6, second slice: Rail (fourth cargo gateway) + bus-route mechanic. ---
+        // Rail Terminal: domestic gateway, no coastal/population gate like Port/Trade Depot (only
+        // Airport has spec §19's "small town" restriction). Costs between Port (8000) and Airport
+        // (15000) — bigger infrastructure than a dock, smaller than an international airport.
+        set(BuildingType.RAIL_TERMINAL, 10000, 45, 0, 0, 0);
+        // Bus Depot: CAPACITY here means "max simultaneous routes it can dispatch" (CreateBusRouteCommand
+        // reads it), not a UtilitySystem coverage source — radius 0.
+        set(BuildingType.BUS_DEPOT, 2000, 15, 3, 0, 0);
+        // Bus Stop: cheap coverage-only point, same shape as Fase 2's civic services, except
+        // UtilitySystem only actually floods from one that's part of an active route (see its javadoc).
+        setCoverageOnly(BuildingType.BUS_STOP, 300, 3, 20, 0);
     }
 
     public static double constructionCost(byte buildingType) {

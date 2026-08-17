@@ -84,5 +84,9 @@ public final class WorldConstants {
     public static final int SERVICE_EDUCATION = 1 << 10;
     /** Set when in range of a Church. */
     public static final int SERVICE_RELIGION = 1 << 11;
-    // Central Bank and City Hall are not coverage sources — no bit here, see BuildingEconomics.
+    /** Set when in range of a Bus Stop that is a stop on at least one active bus route — an
+     *  isolated, route-less stop gives no coverage (see UtilitySystem/docs/roadmap.md's bus-route
+     *  mechanic, MVP 0.6). */
+    public static final int SERVICE_TRANSIT = 1 << 12;
+    // Central Bank, City Hall and Bus Depot are not coverage sources — no bit here.
 }

@@ -4,6 +4,7 @@ import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.economy.BuildingEconomics;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.BuildingType;
+import com.kosmos.atlas.sim.trade.BusRouteRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
 import com.kosmos.atlas.sim.world.WorldConstants;
@@ -323,5 +324,75 @@ class UtilitySystemTest {
         chunk.buildingId[Chunk.tileIndex(5, 5)] = WorldConstants.NO_BUILDING;
         system.update(store, buildings, new CityRegistry());
         assertEquals(0, chunk.pollutionLevel[Chunk.tileIndex(5, 5)]);
+    }
+
+    private static boolean transit(Chunk chunk, int lx, int ly) {
+        return (chunk.serviceFlags[Chunk.tileIndex(lx, ly)] & WorldConstants.SERVICE_TRANSIT) != 0;
+    }
+
+    @Test
+    void aBusStopWithNoRouteGivesNoTransitCoverage() {
+        ChunkStore store = new ChunkStore(4);
+        Chunk chunk = new Chunk();
+        chunk.reset(0, 0);
+        java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+        store.put(chunk);
+
+        BuildingRegistry buildings = new BuildingRegistry();
+        int stopId = buildings.create(BuildingType.BUS_STOP, 5, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = stopId;
+
+        new UtilitySystem().update(store, buildings, new CityRegistry(), new BusRouteRegistry());
+
+        assertFalse(transit(chunk, 5, 5), "an isolated bus stop with no active route must give no coverage");
+    }
+
+    @Test
+    void aBusStopOnAnActiveRouteGivesTransitCoverage() {
+        ChunkStore store = new ChunkStore(4);
+        Chunk chunk = new Chunk();
+        chunk.reset(0, 0);
+        java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+        store.put(chunk);
+
+        BuildingRegistry buildings = new BuildingRegistry();
+        int stopA = buildings.create(BuildingType.BUS_STOP, 5, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = stopA;
+        int stopB = buildings.create(BuildingType.BUS_STOP, 6, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(6, 5)] = stopB;
+
+        BusRouteRegistry busRoutes = new BusRouteRegistry();
+        busRoutes.create(1, 1, new int[] {stopA, stopB});
+
+        new UtilitySystem().update(store, buildings, new CityRegistry(), busRoutes);
+
+        assertTrue(transit(chunk, 5, 5), "a stop that's part of an active route must give coverage");
+        assertTrue(transit(chunk, 6, 5));
+    }
+
+    @Test
+    void losingItsOnlyRouteRemovesABusStopsTransitCoverageOnNextUpdate() {
+        ChunkStore store = new ChunkStore(4);
+        Chunk chunk = new Chunk();
+        chunk.reset(0, 0);
+        java.util.Arrays.fill(chunk.terrainType, WorldConstants.TERRAIN_PLAIN);
+        store.put(chunk);
+
+        BuildingRegistry buildings = new BuildingRegistry();
+        int stopA = buildings.create(BuildingType.BUS_STOP, 5, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(5, 5)] = stopA;
+        int stopB = buildings.create(BuildingType.BUS_STOP, 6, 5, 1);
+        chunk.buildingId[Chunk.tileIndex(6, 5)] = stopB;
+
+        BusRouteRegistry busRoutes = new BusRouteRegistry();
+        int routeId = busRoutes.create(1, 1, new int[] {stopA, stopB});
+
+        UtilitySystem system = new UtilitySystem();
+        system.update(store, buildings, new CityRegistry(), busRoutes);
+        assertTrue(transit(chunk, 5, 5));
+
+        busRoutes.demolishRoute(routeId);
+        system.update(store, buildings, new CityRegistry(), busRoutes);
+        assertFalse(transit(chunk, 5, 5), "removing the route must clear coverage on the next update");
     }
 }

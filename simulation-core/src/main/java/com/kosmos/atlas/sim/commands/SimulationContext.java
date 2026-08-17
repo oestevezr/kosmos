@@ -4,8 +4,10 @@ import com.kosmos.atlas.sim.city.CityRegistry;
 import com.kosmos.atlas.sim.economy.LoanRegistry;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.trade.AirportRegistry;
+import com.kosmos.atlas.sim.trade.BusRouteRegistry;
 import com.kosmos.atlas.sim.trade.PortRegistry;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
+import com.kosmos.atlas.sim.trade.StationRegistry;
 import com.kosmos.atlas.sim.world.ChunkStore;
 
 /**
@@ -33,6 +35,8 @@ public final class SimulationContext {
     private final LoanRegistry loans;
     private final PortRegistry ports;
     private final AirportRegistry airports;
+    private final StationRegistry stations;
+    private final BusRouteRegistry busRoutes;
     private final int worldSizeTiles;
     private final long currentTick;
 
@@ -68,6 +72,13 @@ public final class SimulationContext {
     public SimulationContext(ChunkStore chunkStore, BuildingRegistry buildings, CityRegistry cities,
                               RegionalGraph regionalGraph, LoanRegistry loans, PortRegistry ports,
                               AirportRegistry airports, int worldSizeTiles, long currentTick) {
+        this(chunkStore, buildings, cities, regionalGraph, loans, ports, airports, null, null, worldSizeTiles, currentTick);
+    }
+
+    public SimulationContext(ChunkStore chunkStore, BuildingRegistry buildings, CityRegistry cities,
+                              RegionalGraph regionalGraph, LoanRegistry loans, PortRegistry ports,
+                              AirportRegistry airports, StationRegistry stations, BusRouteRegistry busRoutes,
+                              int worldSizeTiles, long currentTick) {
         this.chunkStore = chunkStore;
         this.buildings = buildings;
         this.cities = cities;
@@ -75,6 +86,8 @@ public final class SimulationContext {
         this.loans = loans;
         this.ports = ports;
         this.airports = airports;
+        this.stations = stations;
+        this.busRoutes = busRoutes;
         this.worldSizeTiles = worldSizeTiles;
         this.currentTick = currentTick;
     }
@@ -147,6 +160,28 @@ public final class SimulationContext {
             throw new IllegalStateException("This SimulationContext was not given an AirportRegistry");
         }
         return airports;
+    }
+
+    public StationRegistry stations() {
+        return stations;
+    }
+
+    public StationRegistry requireStations() {
+        if (stations == null) {
+            throw new IllegalStateException("This SimulationContext was not given a StationRegistry");
+        }
+        return stations;
+    }
+
+    public BusRouteRegistry busRoutes() {
+        return busRoutes;
+    }
+
+    public BusRouteRegistry requireBusRoutes() {
+        if (busRoutes == null) {
+            throw new IllegalStateException("This SimulationContext was not given a BusRouteRegistry");
+        }
+        return busRoutes;
     }
 
     public int worldSizeTiles() {

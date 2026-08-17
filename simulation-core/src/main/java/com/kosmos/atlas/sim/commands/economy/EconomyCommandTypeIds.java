@@ -9,6 +9,10 @@ public final class EconomyCommandTypeIds {
     public static final int BUILD_PORT = 24;
     public static final int BUILD_CIVIC_BUILDING = 25;
     public static final int BUILD_AIRPORT = 26;
+    public static final int BUILD_RAIL_TERMINAL = 27;
+    public static final int BUILD_BUS_DEPOT = 28;
+    public static final int BUILD_BUS_STOP = 29;
+    public static final int CREATE_BUS_ROUTE = 30;
 
     private EconomyCommandTypeIds() {
     }

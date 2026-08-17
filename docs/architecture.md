@@ -248,10 +248,20 @@ real del cliente desktop y una re-ejecución del escenario `--bench city` del he
    cada edificio activo cada tick; sigue muy por debajo del presupuesto de sub-sistema (spec §41),
    no ameritó una pasada de optimización.
 
-   **Actualización tras migración (MVP 0.6 parcial)**: `PopulationSystem.tick` da **104.96 µs/op**
-   — sin cambio perceptible frente a la cifra de densidad evolutiva; `migrationMultiplier` es un
-   loop de 8 iteraciones (`GoodType.COUNT`) que solo corre por cada tile que se asienta, no por cada
-   edificio activo cada tick, así que su costo queda dentro del ruido de medición.
+   **Actualización tras migración (MVP 0.6, primera pasada)**: `PopulationSystem.tick` da
+   **104.96 µs/op** — sin cambio perceptible frente a la cifra de densidad evolutiva;
+   `migrationMultiplier` es un loop de 8 iteraciones (`GoodType.COUNT`) que solo corre por cada tile
+   que se asienta, no por cada edificio activo cada tick, así que su costo queda dentro del ruido de
+   medición.
+
+   **Actualización tras rail/rutas de autobús/turismo (MVP 0.6, segunda pasada)**:
+   `UtilitySystem.update` da **2521.1 µs/op** (antes 2334.5 µs/op) y `PopulationSystem.tick` da
+   **104.6 µs/op** (sin cambio). El aumento de `UtilitySystem` es plausible pero no concluyente con
+   una sola iteración de warmup/medición (`-wi 1 -i 1`) — la nueva pasada de cobertura de tránsito
+   solo corre cuando existe al menos un `BusRouteRegistry` no nulo con paradas activas, ausente en
+   `BenchmarkCityFixture`; el aumento observado cae dentro del ruido esperable de una corrida de una
+   sola muestra, no se investigó más a fondo por no bloquear la entrega. Pendiente: una corrida con
+   más iteraciones (`-wi 5 -i 5`) si esta cifra se vuelve relevante más adelante.
 3. **`WorldRenderer` ahora usa un `Mesh` estático por chunk** (`ChunkMesh`, nuevo) en vez de 1024
    llamadas a `SpriteBatch.draw` reenviadas cada frame — la caché de render de spec §44.3 tal cual
    está descrita, no solo posiciones de pantalla cacheadas en CPU. El vértice/UV se sube a la GPU

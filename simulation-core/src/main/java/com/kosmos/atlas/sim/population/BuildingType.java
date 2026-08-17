@@ -87,9 +87,21 @@ public final class BuildingType {
      *  not automatically support an international airport"). Passenger capacity is deliberately
      *  not modeled yet — see {@code docs/roadmap.md}. */
     public static final byte AIRPORT = 32;
+    /** MVP 0.6's second slice: a fourth cargo gateway, same {@code MarketSystem} treatment as
+     *  Port/Airport but domestic — no coastal requirement, no population gate, no customs bonus
+     *  (spec §18: rail "excels at bulk cargo"). Registers a {@link com.kosmos.atlas.sim.trade.NodeType#STATION} node. */
+    public static final byte RAIL_TERMINAL = 33;
+    /** The bus depot ("central") — owns a capacity of simultaneous routes
+     *  ({@link com.kosmos.atlas.sim.economy.BuildingEconomics#capacity}), not itself a coverage
+     *  source or a graph node. See {@code docs/roadmap.md}'s bus-route mechanic. */
+    public static final byte BUS_DEPOT = 34;
+    /** A bus stop — a coverage-only building like Fase 2's civic services, except its coverage only
+     *  activates while it's a stop on at least one active bus route (see {@code UtilitySystem}).
+     *  Registers a {@link com.kosmos.atlas.sim.trade.NodeType#BUS_STOP} node. */
+    public static final byte BUS_STOP = 35;
 
     /** One past the highest constant above — sizes BuildingEconomics's per-type tables. */
-    public static final int COUNT = 33;
+    public static final int COUNT = 36;
 
     private BuildingType() {
     }

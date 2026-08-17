@@ -109,6 +109,47 @@ class GovernmentFinanceSystemTest {
     }
 
     @Test
+    void aCityWithMuseumAndParkEarnsMoreThanOneWithNeitherAtEqualPopulation() {
+        BuildingRegistry withAttractions = new BuildingRegistry();
+        CityRegistry cityWithAttractions = new CityRegistry();
+        int idWith = cityWithAttractions.create("Touristville", 0, 0, 0);
+        int homeWith = withAttractions.create(BuildingType.RESIDENTIAL, 0, 0, idWith);
+        withAttractions.setPopulation(homeWith, 1000);
+        withAttractions.create(BuildingType.MUSEUM, 1, 0, idWith);
+        withAttractions.create(BuildingType.PARK, 2, 0, idWith);
+
+        BuildingRegistry withoutAttractions = new BuildingRegistry();
+        CityRegistry cityWithoutAttractions = new CityRegistry();
+        int idWithout = cityWithoutAttractions.create("Plainville", 0, 0, 0);
+        int homeWithout = withoutAttractions.create(BuildingType.RESIDENTIAL, 0, 0, idWithout);
+        withoutAttractions.setPopulation(homeWithout, 1000);
+
+        new GovernmentFinanceSystem().tick(withAttractions, cityWithAttractions);
+        new GovernmentFinanceSystem().tick(withoutAttractions, cityWithoutAttractions);
+
+        assertTrue(cityWithAttractions.finance(idWith).treasuryBalance() > cityWithoutAttractions.finance(idWithout).treasuryBalance(),
+            "the same population should earn tourism revenue only when Museum/Park attractions exist");
+    }
+
+    @Test
+    void tourismRevenueIsZeroWithNoPopulationEvenWithAttractions() {
+        BuildingRegistry buildings = new BuildingRegistry();
+        CityRegistry cities = new CityRegistry();
+        int cityId = cities.create("Emptyville", 0, 0, 0);
+        buildings.create(BuildingType.MUSEUM, 0, 0, cityId);
+        buildings.create(BuildingType.PARK, 1, 0, cityId);
+
+        double before = cities.finance(cityId).treasuryBalance();
+        new GovernmentFinanceSystem().tick(buildings, cities);
+
+        double expectedNet = BuildingEconomics.revenuePerAccrual(BuildingType.MUSEUM)
+            - BuildingEconomics.maintenancePerAccrual(BuildingType.MUSEUM)
+            - BuildingEconomics.maintenancePerAccrual(BuildingType.PARK);
+        assertEquals(expectedNet, cities.finance(cityId).treasuryBalance() - before, 1e-9,
+            "no residents means no tourism revenue, regardless of attractions built");
+    }
+
+    @Test
     void higherDensityLevelYieldsMoreRevenueForTheSamePopulation() {
         BuildingRegistry buildings = new BuildingRegistry();
         CityRegistry cities = new CityRegistry();

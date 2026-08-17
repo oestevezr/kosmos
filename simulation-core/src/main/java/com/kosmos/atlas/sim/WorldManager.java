@@ -13,10 +13,12 @@ import com.kosmos.atlas.sim.economy.MarketSystem;
 import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.population.PopulationSystem;
 import com.kosmos.atlas.sim.trade.AirportRegistry;
+import com.kosmos.atlas.sim.trade.BusRouteRegistry;
 import com.kosmos.atlas.sim.trade.PortRegistry;
 import com.kosmos.atlas.sim.trade.RegionalGraph;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
 import com.kosmos.atlas.sim.trade.ShipmentSystem;
+import com.kosmos.atlas.sim.trade.StationRegistry;
 import com.kosmos.atlas.sim.transport.RoadNetwork;
 import com.kosmos.atlas.sim.utility.UtilitySystem;
 import com.kosmos.atlas.sim.world.ChunkManager;
@@ -69,6 +71,8 @@ public final class WorldManager implements AutoCloseable {
     private final LoanRegistry loans = new LoanRegistry();
     private final PortRegistry ports = new PortRegistry();
     private final AirportRegistry airports = new AirportRegistry();
+    private final StationRegistry stations = new StationRegistry();
+    private final BusRouteRegistry busRoutes = new BusRouteRegistry();
     private final RoadNetwork roadNetwork = new RoadNetwork();
     private final UtilitySystem utilitySystem = new UtilitySystem();
     private final PopulationSystem populationSystem = new PopulationSystem();
@@ -95,13 +99,13 @@ public final class WorldManager implements AutoCloseable {
         scheduler.register("road-network", ROAD_NETWORK_CADENCE_TICKS, tick ->
             roadNetwork.update(chunkManager.store()));
         scheduler.register("utilities", UTILITY_CADENCE_TICKS, tick ->
-            utilitySystem.update(chunkManager.store(), buildings, cities));
+            utilitySystem.update(chunkManager.store(), buildings, cities, busRoutes));
         scheduler.register("population", POPULATION_CADENCE_TICKS, tick ->
             populationSystem.tick(chunkManager.store(), buildings, cities, utilitySystem));
         scheduler.register("government-finance", FINANCE_CADENCE_TICKS, tick ->
             financeSystem.tick(buildings, cities));
         scheduler.register("market", MARKET_CADENCE_TICKS, tick ->
-            marketSystem.tick(buildings, cities, regionalGraph, shipments, ports, airports, tick));
+            marketSystem.tick(buildings, cities, regionalGraph, shipments, ports, airports, stations, tick));
         scheduler.register("shipments", SHIPMENT_CADENCE_TICKS, tick ->
             shipmentSystem.tick(tick, shipments, cities));
         scheduler.register("loans", LOAN_CADENCE_TICKS, tick ->
@@ -164,6 +168,14 @@ public final class WorldManager implements AutoCloseable {
         return airports;
     }
 
+    public StationRegistry stations() {
+        return stations;
+    }
+
+    public BusRouteRegistry busRoutes() {
+        return busRoutes;
+    }
+
     public void enableJournal(CommandJournal journal) {
         this.journal = journal;
     }
@@ -202,7 +214,7 @@ public final class WorldManager implements AutoCloseable {
         while ((command = commandBus.poll()) != null) {
             SimulationContext ctx = new SimulationContext(
                 chunkManager.store(), buildings, cities, regionalGraph, loans, ports, airports,
-                genSettings.worldSizeTiles, scheduler.currentTick());
+                stations, busRoutes, genSettings.worldSizeTiles, scheduler.currentTick());
             CommandResult result = command.apply(ctx);
             if (result == CommandResult.ACCEPTED) {
                 metrics.onCommandAccepted();

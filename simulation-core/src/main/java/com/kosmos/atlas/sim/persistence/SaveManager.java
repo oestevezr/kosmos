@@ -6,6 +6,7 @@ import com.kosmos.atlas.sim.population.BuildingRegistry;
 import com.kosmos.atlas.sim.trade.AirportRegistry;
 import com.kosmos.atlas.sim.trade.PortRegistry;
 import com.kosmos.atlas.sim.trade.ShipmentRegistry;
+import com.kosmos.atlas.sim.trade.StationRegistry;
 import com.kosmos.atlas.sim.world.Chunk;
 import com.kosmos.atlas.sim.world.ChunkStore;
 
@@ -81,6 +82,13 @@ public final class SaveManager {
     public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings,
                       CityRegistry cities, ShipmentRegistry shipments, LoanRegistry loans, PortRegistry ports,
                       AirportRegistry airports) throws IOException {
+        save(worldName, meta, chunkStore, buildings, cities, shipments, loans, ports, airports, null);
+    }
+
+    /** As above, also writing {@code stations.dat} (Rail Terminal platforms/cargo-capacity, MVP 0.6) if {@code stations} is non-null. */
+    public void save(String worldName, WorldMeta meta, ChunkStore chunkStore, BuildingRegistry buildings,
+                      CityRegistry cities, ShipmentRegistry shipments, LoanRegistry loans, PortRegistry ports,
+                      AirportRegistry airports, StationRegistry stations) throws IOException {
         Path worldDir = resolveWorldDir(worldName);
         meta.writeTo(worldDir.resolve("world.meta"));
 
@@ -120,6 +128,9 @@ public final class SaveManager {
         }
         if (airports != null) {
             AirportRegistryIO.write(worldDir.resolve("airports.dat"), airports);
+        }
+        if (stations != null) {
+            StationRegistryIO.write(worldDir.resolve("stations.dat"), stations);
         }
     }
 
@@ -174,6 +185,14 @@ public final class SaveManager {
 
     public AirportRegistry loadAirports(String worldName) throws IOException {
         return AirportRegistryIO.read(resolveWorldDir(worldName).resolve("airports.dat"));
+    }
+
+    public boolean hasStations(String worldName) throws IOException {
+        return Files.isRegularFile(resolveWorldDir(worldName).resolve("stations.dat"));
+    }
+
+    public StationRegistry loadStations(String worldName) throws IOException {
+        return StationRegistryIO.read(resolveWorldDir(worldName).resolve("stations.dat"));
     }
 
     /** Lists every persisted chunk-delta coordinate for a world, without loading their content yet. */
